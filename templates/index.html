@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>駅到達圏検索</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, 'Segoe UI', sans-serif; background: #f0f2f5; color: #333; }
+  .container { max-width: 800px; margin: 0 auto; padding: 20px; }
+  h1 { text-align: center; margin: 20px 0; font-size: 1.5rem; }
+  .form-card {
+    background: #fff; border-radius: 12px; padding: 24px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-bottom: 20px;
+  }
+  .form-row { display: flex; gap: 12px; flex-wrap: wrap; align-items: end; }
+  .form-group { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 140px; }
+  .form-group label { font-size: 0.85rem; font-weight: 600; color: #555; }
+  input, select { padding: 10px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 1rem; }
+  input:focus, select:focus { outline: none; border-color: #4a90d9; }
+  button {
+    padding: 10px 24px; background: #4a90d9; color: #fff; border: none;
+    border-radius: 8px; font-size: 1rem; cursor: pointer; white-space: nowrap;
+  }
+  button:hover { background: #3a7bc8; }
+  .info { text-align: center; color: #888; padding: 40px 0; }
+  .result-header {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 12px; padding-bottom: 8px; border-bottom: 2px solid #4a90d9;
+  }
+  .result-header h2 { font-size: 1.1rem; }
+  .count { background: #4a90d9; color: #fff; padding: 4px 12px; border-radius: 20px; font-size: 0.9rem; }
+  table { width: 100%; border-collapse: collapse; }
+  th { background: #f8f9fa; text-align: left; padding: 10px 12px; font-size: 0.85rem; color: #666; position: sticky; top: 0; }
+  td { padding: 10px 12px; border-bottom: 1px solid #eee; font-size: 0.9rem; }
+  tr:hover td { background: #f8fbff; }
+  .time-badge { background: #e8f4e8; color: #2d7a2d; padding: 2px 8px; border-radius: 4px; font-weight: 600; }
+  .transfer-badge { background: #fff3e0; color: #e65100; padding: 2px 8px; border-radius: 4px; }
+  .route { color: #888; font-size: 0.8rem; max-width: 300px; word-break: break-all; }
+  .error { color: #d32f2f; text-align: center; padding: 20px; }
+  .loading { text-align: center; padding: 40px; color: #888; }
+  #suggestions { position: absolute; background: #fff; border: 1px solid #ddd; border-radius: 8px;
+    max-height: 200px; overflow-y: auto; z-index: 10; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+  #suggestions div { padding: 8px 12px; cursor: pointer; }
+  #suggestions div:hover { background: #f0f4ff; }
+  .input-wrap { position: relative; flex: 1; min-width: 140px; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>駅到達圏検索</h1>
+  <div class="form-card">
+    <div class="form-row">
+      <div class="form-group input-wrap">
+        <label>目的駅</label>
+        <input type="text" id="target" placeholder="例: 渋谷" autocomplete="off">
+        <div id="suggestions"></div>
+      </div>
+      <div class="form-group">
+        <label>所要時間（分）</label>
+        <input type="number" id="time" value="30" min="1" max="120">
+      </div>
+      <div class="form-group">
+        <label>乗り換え上限</label>
+        <select id="transfers">
+          <option value="">制限なし</option>
+          <option value="0">0回（直通のみ）</option>
+          <option value="1">1回まで</option>
+          <option value="2">2回まで</option>
+          <option value="3">3回まで</option>
+        </select>
+      </div>
+      <button onclick="doSearch()">検索</button>
+    </div>
+  </div>
+  <div id="results"><p class="info">駅名と時間を入力して検索してください</p></div>
+</div>
+<script>
+const stations = {{ stations | tojson }};
+const input = document.getElementById('target');
+const sugBox = document.getElementById('suggestions');
+
+input.addEventListener('input', () => {
+  const v = input.value.trim();
+  sugBox.innerHTML = '';
+  if (!v) return;
+  const hits = stations.filter(s => s.includes(v)).slice(0, 15);
+  hits.forEach(s => {
+    const d = document.createElement('div');
+    d.textContent = s;
+    d.onclick = () => { input.value = s; sugBox.innerHTML = ''; };
+    sugBox.appendChild(d);
+  });
+});
+
+document.addEventListener('click', e => {
+  if (!e.target.closest('.input-wrap')) sugBox.innerHTML = '';
+});
+
+input.addEventListener('keydown', e => {
+  if (e.key === 'Enter') doSearch();
+});
+
+async function doSearch() {
+  const target = document.getElementById('target').value.trim();
+  const time = document.getElementById('time').value;
+  const transfers = document.getElementById('transfers').value;
+  if (!target) return;
+
+  const res = document.getElementById('results');
+  res.innerHTML = '<p class="loading">検索中...</p>';
+
+  const params = new URLSearchParams({ target, time });
+  if (transfers !== '') params.set('transfers', transfers);
+
+  const resp = await fetch('/search?' + params);
+  const data = await resp.json();
+
+  if (data.error) {
+    res.innerHTML = '<p class="error">' + data.error + '</p>';
+    return;
+  }
+
+  const transferLabel = transfers === '' ? '制限なし' : transfers + '回以内';
+  let html = '<div class="form-card"><div class="result-header">' +
+    '<h2>' + target + ' まで ' + time + '分以内（乗換: ' + transferLabel + '）</h2>' +
+    '<span class="count">' + data.count + '駅</span></div>';
+
+  if (data.count === 0) {
+    html += '<p class="info">該当する駅がありません</p></div>';
+  } else {
+    html += '<table><tr><th>駅名</th><th>時間</th><th>乗換</th><th>経路</th></tr>';
+    data.results.forEach(r => {
+      html += '<tr><td><strong>' + r.station + '</strong></td>' +
+        '<td><span class="time-badge">' + r.time + '分</span></td>' +
+        '<td><span class="transfer-badge">' + r.transfers + '回</span></td>' +
+        '<td class="route">' + r.route + '</td></tr>';
+    });
+    html += '</table></div>';
+  }
+  res.innerHTML = html;
+}
+</script>
+</body>
+</html>
