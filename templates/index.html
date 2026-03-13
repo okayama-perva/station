@@ -39,6 +39,10 @@
   .route { color: #888; font-size: 0.8rem; max-width: 300px; word-break: break-all; }
   .error { color: #d32f2f; text-align: center; padding: 20px; }
   .loading { text-align: center; padding: 40px; color: #888; }
+  .group-card { border: 1px solid #e7ebf0; border-radius: 12px; margin-top: 14px; overflow: hidden; }
+  .group-head { display: flex; justify-content: space-between; align-items: center; padding: 12px 14px; background: #f8fbff; border-bottom: 1px solid #e7ebf0; }
+  .group-title { display: flex; gap: 8px; align-items: center; font-weight: 700; }
+  .service-badge { background: #eaf1ff; color: #2452a3; padding: 3px 8px; border-radius: 999px; font-size: 0.75rem; font-weight: 700; }
   #suggestions { position: absolute; background: #fff; border: 1px solid #ddd; border-radius: 8px;
     max-height: 200px; overflow-y: auto; z-index: 10; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
   #suggestions div { padding: 8px 12px; cursor: pointer; }
@@ -68,6 +72,14 @@
           <option value="1">1回まで</option>
           <option value="2">2回まで</option>
           <option value="3">3回まで</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>種別</label>
+        <select id="service">
+          <option value="all">すべて</option>
+          <option value="local">各駅停車のみ</option>
+          <option value="express">急行・特急系のみ</option>
         </select>
       </div>
       <button onclick="doSearch()">検索</button>
@@ -105,6 +117,7 @@ async function doSearch() {
   const target = document.getElementById('target').value.trim();
   const time = document.getElementById('time').value;
   const transfers = document.getElementById('transfers').value;
+  const service = document.getElementById('service').value;
   if (!target) return;
 
   const res = document.getElementById('results');
@@ -112,6 +125,7 @@ async function doSearch() {
 
   const params = new URLSearchParams({ target, time });
   if (transfers !== '') params.set('transfers', transfers);
+  if (service !== 'all') params.set('service', service);
 
   const resp = await fetch('/search?' + params);
   const data = await resp.json();
@@ -122,21 +136,29 @@ async function doSearch() {
   }
 
   const transferLabel = transfers === '' ? '制限なし' : transfers + '回以内';
+  const serviceLabel = service === 'all' ? 'すべて' : (service === 'local' ? '各駅停車のみ' : '急行・特急系のみ');
   let html = '<div class="form-card"><div class="result-header">' +
-    '<h2>' + target + ' まで ' + time + '分以内（乗換: ' + transferLabel + '）</h2>' +
+    '<h2>' + target + ' まで ' + time + '分以内（乗換: ' + transferLabel + ' / 種別: ' + serviceLabel + '）</h2>' +
     '<span class="count">' + data.count + '駅</span></div>';
 
   if (data.count === 0) {
     html += '<p class="info">該当する駅がありません</p></div>';
   } else {
-    html += '<table><tr><th>駅名</th><th>時間</th><th>乗換</th><th>経路</th></tr>';
-    data.results.forEach(r => {
-      html += '<tr><td><strong>' + r.station + '</strong></td>' +
-        '<td><span class="time-badge">' + r.time + '分</span></td>' +
-        '<td><span class="transfer-badge">' + r.transfers + '回</span></td>' +
-        '<td class="route">' + r.route + '</td></tr>';
+    data.groups.forEach(group => {
+      html += '<div class="group-card">';
+      html += '<div class="group-head"><div class="group-title"><span>' + group.line +
+        '</span><span class="service-badge">' + group.service + '</span></div>' +
+        '<span class="count">' + group.count + '駅</span></div>';
+      html += '<table><tr><th>駅名</th><th>時間</th><th>乗換</th><th>経路</th></tr>';
+      group.results.forEach(r => {
+        html += '<tr><td><strong>' + r.station + '</strong></td>' +
+          '<td><span class="time-badge">' + r.time + '分</span></td>' +
+          '<td><span class="transfer-badge">' + r.transfers + '回</span></td>' +
+          '<td class="route">' + r.route + '</td></tr>';
+      });
+      html += '</table></div>';
     });
-    html += '</table></div>';
+    html += '</div>';
   }
   res.innerHTML = html;
 }

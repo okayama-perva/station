@@ -1,14 +1,30 @@
-"""駅到達圏検索 - Webアプリ"""
-from flask import Flask, render_template, request, jsonify
-import json
-from pathlib import Path
-from station_search import load_network, build_graph, search_reachable
+"""駅到達圏検索 - Webアプリ。"""
+
+from flask import Flask, jsonify, render_template, request
+
+from station_search import (
+    build_graph,
+    canonicalize_station_name,
+    load_network,
+    search_reachable,
+)
 
 app = Flask(__name__)
 
 network = load_network()
-graph, station_lines, transfer_time = build_graph(network)
-all_stations = sorted(station_lines.keys())
+station_aliases = network.get("station_aliases", {})
+graph, station_lines, transfer_time, line_catalog = build_graph(network)
+all_stations = sorted(set(station_lines.keys()) | set(station_aliases.keys()))
+
+
+def parse_service_filter(value: str | None):
+    if not value or value == "all":
+        return None
+    if value == "local":
+        return {"各駅停車"}
+    if value == "express":
+        return {"急行", "特急", "快速", "快特", "通勤急行"}
+    return None
 
 
 @app.route("/")
@@ -18,22 +34,68 @@ def index():
 
 @app.route("/search")
 def search():
-    target = request.args.get("target", "").strip()
+    raw_target = request.args.get("target", "").strip()
+    target = canonicalize_station_name(raw_target, station_aliases)
     max_time = request.args.get("time", 30, type=int)
-    max_transfers = request.args.get("transfers", type=int)  # None if not provided
+    max_transfers = request.args.get("transfers", type=int)
+    service_filter = request.args.get("service", "all")
 
     if target not in station_lines:
-        return jsonify({"error": f"「{target}」はデータに存在しません。"})
+        return jsonify({"error": f"「{raw_target}」はデータに存在しません。"})
 
-    results = search_reachable(graph, station_lines, target, max_time,
-                               max_transfers, transfer_time)
+    results = search_reachable(
+        graph,
+        station_lines,
+        line_catalog,
+        target,
+        max_time,
+        max_transfers,
+        transfer_time,
+        parse_service_filter(service_filter),
+    )
     results.pop(target, None)
 
-    items = [{"station": st, "time": t, "transfers": tr, "route": route}
-             for st, (t, tr, route) in results.items()]
+    items = [
+        {
+            "station": station,
+            "time": time,
+            "transfers": transfers,
+            "route": route,
+            "line": line_name,
+            "base_line": base_name,
+            "service": service,
+            "group_key": f"{base_name} [{service}]",
+        }
+        for station, (time, transfers, route, line_name, base_name, service) in results.items()
+    ]
     items.sort(key=lambda x: (x["time"], x["transfers"], x["station"]))
 
-    return jsonify({"count": len(items), "results": items})
+    groups = []
+    grouped = {}
+    for item in items:
+        key = item["group_key"]
+        if key not in grouped:
+            grouped[key] = {
+                "line": item["base_line"],
+                "service": item["service"],
+                "count": 0,
+                "results": [],
+            }
+            groups.append(grouped[key])
+        grouped[key]["results"].append(item)
+        grouped[key]["count"] += 1
+
+    groups.sort(key=lambda g: (g["line"], g["service"]))
+
+    return jsonify(
+        {
+            "target": target,
+            "input_target": raw_target,
+            "count": len(items),
+            "results": items,
+            "groups": groups,
+        }
+    )
 
 
 if __name__ == "__main__":
