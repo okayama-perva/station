@@ -151,14 +151,6 @@
           <option value="express">急行・特急系のみ</option>
         </select>
       </div>
-      <div class="form-group">
-        <label for="time_band">時間帯</label>
-        <select id="time_band">
-          {% for key, meta in time_bands.items() %}
-          <option value="{{ key }}" {% if key == default_time_band %}selected{% endif %}>{{ meta.label }}</option>
-          {% endfor %}
-        </select>
-      </div>
       <button onclick="doSearch()">検索</button>
     </div>
   </div>
@@ -198,13 +190,12 @@ async function doSearch() {
   const time = document.getElementById('time').value;
   const transfers = document.getElementById('transfers').value;
   const service = document.getElementById('service').value;
-  const timeBand = document.getElementById('time_band').value;
   if (!target) return;
 
   const resultArea = document.getElementById('results');
   resultArea.innerHTML = '<p class="loading">検索中...</p>';
 
-  const params = new URLSearchParams({ target, time, time_band: timeBand });
+  const params = new URLSearchParams({ target, time });
   if (transfers !== '') params.set('transfers', transfers);
   if (service !== 'all') params.set('service', service);
 
@@ -221,7 +212,7 @@ async function doSearch() {
   let html = '<div class="result-card"><div class="result-header">' +
     '<h2>' + data.target + ' まで ' + time + '分以内</h2>' +
     '<span class="count">' + data.count + '駅</span></div>' +
-    '<p class="meta-note">種別: ' + serviceLabel + ' / 乗換: ' + transferLabel + ' / 時間帯: ' + data.time_band_label + '</p>';
+    '<p class="meta-note">種別: ' + serviceLabel + ' / 乗換: ' + transferLabel + '</p>';
 
   if (data.count === 0) {
     html += '<p class="info">条件に合う駅はありませんでした</p></div>';

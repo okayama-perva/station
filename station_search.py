@@ -9,7 +9,8 @@ from pathlib import Path
 from typing import Any
 
 
-DEFAULT_TIME_BAND = "weekday_offpeak"
+LOCAL_SERVICES = {"各駅停車", "各停", "普通"}
+EXPRESS_SERVICES = {"急行", "特急", "快速", "快特", "通勤急行"}
 
 
 def load_network(data_path: str | None = None) -> dict:
@@ -25,18 +26,12 @@ def canonicalize_station_name(name: str, aliases: dict[str, str] | None = None) 
     return aliases.get(name, name)
 
 
-def normalize_segment_times(value: Any, default_band: str) -> dict[str, int]:
+def normalize_segment_time(value: Any) -> int:
     if isinstance(value, dict):
-        return {str(k): int(v) for k, v in value.items()}
-    return {default_band: int(value)}
-
-
-def resolve_segment_time(times: dict[str, int], time_band: str, default_band: str) -> int:
-    if time_band in times:
-        return times[time_band]
-    if default_band in times:
-        return times[default_band]
-    return next(iter(times.values()))
+        if "weekday_offpeak" in value:
+            return int(value["weekday_offpeak"])
+        return int(next(iter(value.values())))
+    return int(value)
 
 
 def pair_key(a: str, b: str) -> str:
@@ -64,18 +59,14 @@ def resolve_transfer_time(
 
 
 def build_graph(network: dict) -> tuple[dict, dict, dict, dict]:
-    """ネットワークデータから探索用グラフを構築する。"""
     graph: dict[str, list] = {}
     station_lines: dict[str, set[str]] = {}
     line_catalog: dict[str, dict[str, Any]] = {}
 
-    default_band = network.get("default_time_band", DEFAULT_TIME_BAND)
     station_aliases = network.get("station_aliases", {})
     transfer_context = {
         "default": network.get("transfer_time", 5),
         "overrides": network.get("transfer_overrides", {}),
-        "default_band": default_band,
-        "time_bands": network.get("time_bands", {}),
     }
 
     for line in network["lines"]:
@@ -88,23 +79,23 @@ def build_graph(network: dict) -> tuple[dict, dict, dict, dict]:
         stations = line["stations"]
 
         for i, entry in enumerate(stations):
-            st_name = canonicalize_station_name(entry[0], station_aliases)
-            graph.setdefault(st_name, [])
-            station_lines.setdefault(st_name, set()).add(line_name)
+            station_name = canonicalize_station_name(entry[0], station_aliases)
+            graph.setdefault(station_name, [])
+            station_lines.setdefault(station_name, set()).add(line_name)
 
             if i < len(stations) - 1:
                 next_name = canonicalize_station_name(stations[i + 1][0], station_aliases)
                 graph.setdefault(next_name, [])
-                segment_times = normalize_segment_times(entry[1], default_band)
-                graph[st_name].append((next_name, segment_times, line_name))
-                graph[next_name].append((st_name, segment_times, line_name))
+                segment_time = normalize_segment_time(entry[1])
+                graph[station_name].append((next_name, segment_time, line_name))
+                graph[next_name].append((station_name, segment_time, line_name))
 
         if line.get("loop", False) and len(stations) > 2:
             first = canonicalize_station_name(stations[0][0], station_aliases)
             last = canonicalize_station_name(stations[-1][0], station_aliases)
-            segment_times = normalize_segment_times(stations[-1][1], default_band)
-            graph[last].append((first, segment_times, line_name))
-            graph[first].append((last, segment_times, line_name))
+            segment_time = normalize_segment_time(stations[-1][1])
+            graph[last].append((first, segment_time, line_name))
+            graph[first].append((last, segment_time, line_name))
 
     return graph, station_lines, transfer_context, line_catalog
 
@@ -118,12 +109,8 @@ def search_reachable(
     max_transfers: int | None = None,
     transfer_context: dict[str, Any] | None = None,
     allowed_services: set[str] | None = None,
-    time_band: str | None = None,
 ):
-    """指定時間以内で到達可能な全駅を探索する。"""
-    transfer_context = transfer_context or {"default": 5, "overrides": {}, "default_band": DEFAULT_TIME_BAND}
-    default_band = transfer_context.get("default_band", DEFAULT_TIME_BAND)
-    selected_band = time_band or default_band
+    transfer_context = transfer_context or {"default": 5, "overrides": {}}
 
     pq: list[tuple[int, int, str, str, list[str]]] = []
     best: dict[tuple[str, str], tuple[int, int]] = {}
@@ -137,14 +124,14 @@ def search_reachable(
     results = {}
 
     while pq:
-        time, transfers, station, cur_line, path = heapq.heappop(pq)
+        time, transfers, station, current_line, path = heapq.heappop(pq)
 
         if time > max_time:
             continue
         if max_transfers is not None and transfers > max_transfers:
             continue
 
-        state_key = (station, cur_line)
+        state_key = (station, current_line)
         if state_key in best:
             best_time, best_transfers = best[state_key]
             if time > best_time or (time == best_time and transfers >= best_transfers):
@@ -152,32 +139,31 @@ def search_reachable(
         best[state_key] = (time, transfers)
 
         if station not in results or (time, transfers) < (results[station][0], results[station][1]):
-            meta = line_catalog.get(cur_line, {})
+            meta = line_catalog.get(current_line, {})
             results[station] = (
                 time,
                 transfers,
-                " -> ".join(reversed(path)),
-                cur_line,
-                meta.get("base_name", cur_line),
+                " -> ".join(path),
+                current_line,
+                meta.get("base_name", current_line),
                 meta.get("service", "各駅停車"),
             )
 
-        for neighbor, segment_times, line_name in graph.get(station, []):
+        for neighbor, segment_time, line_name in graph.get(station, []):
             service = line_catalog.get(line_name, {}).get("service", "各駅停車")
             if allowed_services and service not in allowed_services:
                 continue
 
-            travel = resolve_segment_time(segment_times, selected_band, default_band)
-            new_time = time + travel
+            new_time = time + int(segment_time)
             if new_time > max_time:
                 continue
 
-            if line_name == cur_line:
+            if line_name == current_line:
                 new_transfers = transfers
                 new_path = path + [neighbor]
             else:
                 new_transfers = transfers + 1
-                new_time += resolve_transfer_time(transfer_context, station, cur_line, line_name)
+                new_time += resolve_transfer_time(transfer_context, station, current_line, line_name)
                 if new_time > max_time:
                     continue
                 if max_transfers is not None and new_transfers > max_transfers:
@@ -197,15 +183,10 @@ def search_reachable(
 
 def main():
     parser = argparse.ArgumentParser(description="駅到達圏検索")
-    parser.add_argument("target", help="出発駅名")
+    parser.add_argument("target", help="出発駅")
     parser.add_argument("time", type=int, help="最大所要時間（分）")
     parser.add_argument("-t", "--transfers", type=int, default=None, help="最大乗換回数")
-    parser.add_argument("-d", "--data", default=None, help="ネットワークデータJSONパス")
-    parser.add_argument(
-        "--time-band",
-        default=None,
-        help="時間帯キー。例: weekday_offpeak / weekday_peak / weekend_day",
-    )
+    parser.add_argument("-d", "--data", default=None, help="ネットワークデータ JSON パス")
     parser.add_argument("--sort", choices=["time", "name", "transfers"], default="time", help="ソート順")
     args = parser.parse_args()
 
@@ -216,7 +197,7 @@ def main():
 
     if target not in station_lines:
         print(f"エラー: 「{args.target}」はデータに存在しません。")
-        candidates = [s for s in station_lines if args.target in s]
+        candidates = [station for station in station_lines if args.target in station]
         if candidates:
             print("候補:")
             for candidate in candidates[:10]:
@@ -232,12 +213,11 @@ def main():
         args.transfers,
         transfer_context,
         None,
-        args.time_band,
     )
     results.pop(target, None)
 
     if not results:
-        print(f"{target}まで{args.time}分以内に到達できる駅はありません。")
+        print(f"{target} まで {args.time} 分以内に到達できる駅はありません。")
         return
 
     items = [
@@ -251,16 +231,15 @@ def main():
     else:
         items.sort(key=lambda x: x[0])
 
-    transfers_label = f"乗換{args.transfers}回以下" if args.transfers is not None else "乗換制限なし"
-    band_label = args.time_band or transfer_context.get("default_band", DEFAULT_TIME_BAND)
+    transfer_label = f"乗換{args.transfers}回まで" if args.transfers is not None else "乗換制限なし"
     print(f"\n{'=' * 60}")
-    print(f" {target} まで {args.time}分以内 ({transfers_label} / {band_label})")
-    print(f" 該当駅数: {len(items)}駅")
+    print(f" {target} まで {args.time}分以内 ({transfer_label})")
+    print(f" 到達駅数: {len(items)}駅")
     print(f"{'=' * 60}")
     print(f" {'駅名':<10} {'時間':>5} {'乗換':>4}  経路")
     print(f"{'-' * 60}")
     for station, time, transfers, route, base_name, service in items:
-        print(f" {station:<10} {time:>3}分  {transfers:>2}回  [{base_name}/{service}] {route}")
+        print(f" {station:<10} {time:>3}分 {transfers:>3}回 [{base_name}/{service}] {route}")
     print(f"{'=' * 60}")
 
 
