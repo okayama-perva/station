@@ -1,4 +1,4 @@
-"""駅到達圏検索 - Webアプリ。"""
+"""駅到達圏検索のWebアプリ。"""
 
 from flask import Flask, jsonify, render_template, request
 
@@ -13,8 +13,18 @@ app = Flask(__name__)
 
 network = load_network()
 station_aliases = network.get("station_aliases", {})
-graph, station_lines, transfer_time, line_catalog = build_graph(network)
+graph, station_lines, transfer_context, line_catalog = build_graph(network)
 all_stations = sorted(set(station_lines.keys()) | set(station_aliases.keys()))
+time_bands = network.get(
+    "time_bands",
+    {
+        "weekday_offpeak": {"label": "平日日中"},
+        "weekday_peak": {"label": "平日ラッシュ"},
+        "weekend_day": {"label": "土休日昼間"},
+        "late_night": {"label": "深夜帯"},
+    },
+)
+default_time_band = network.get("default_time_band", "weekday_offpeak")
 
 
 def parse_service_filter(value: str | None):
@@ -29,7 +39,12 @@ def parse_service_filter(value: str | None):
 
 @app.route("/")
 def index():
-    return render_template("index.html", stations=all_stations)
+    return render_template(
+        "index.html",
+        stations=all_stations,
+        time_bands=time_bands,
+        default_time_band=default_time_band,
+    )
 
 
 @app.route("/search")
@@ -39,6 +54,9 @@ def search():
     max_time = request.args.get("time", 30, type=int)
     max_transfers = request.args.get("transfers", type=int)
     service_filter = request.args.get("service", "all")
+    time_band = request.args.get("time_band", default_time_band)
+    if time_band not in time_bands:
+        time_band = default_time_band
 
     if target not in station_lines:
         return jsonify({"error": f"「{raw_target}」はデータに存在しません。"})
@@ -50,8 +68,9 @@ def search():
         target,
         max_time,
         max_transfers,
-        transfer_time,
+        transfer_context,
         parse_service_filter(service_filter),
+        time_band,
     )
     results.pop(target, None)
 
@@ -94,6 +113,8 @@ def search():
             "count": len(items),
             "results": items,
             "groups": groups,
+            "time_band": time_band,
+            "time_band_label": time_bands.get(time_band, {}).get("label", time_band),
         }
     )
 

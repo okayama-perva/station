@@ -30,6 +30,40 @@ def infer_base_name(name: str, service: str) -> str:
     return name.replace(service, "").strip(" ・()（）")
 
 
+def build_time_profile(base_minutes, service):
+    if isinstance(base_minutes, dict):
+        return {key: int(value) for key, value in base_minutes.items()}
+
+    base = int(base_minutes)
+    if service in {"特急", "急行", "快速", "快特", "通勤急行"}:
+        return {
+            "weekday_offpeak": base,
+            "weekday_peak": base + 1,
+            "weekend_day": max(1, base),
+            "late_night": base + 1,
+        }
+
+    return {
+        "weekday_offpeak": base,
+        "weekday_peak": base + 1,
+        "weekend_day": max(1, base),
+        "late_night": base + 2,
+    }
+
+
+def normalize_station_times(stations, service):
+    return [(station, build_time_profile(minutes, service)) for station, minutes in stations]
+
+
+def band(offpeak, peak=None, weekend=None, late_night=None):
+    return {
+        "weekday_offpeak": int(offpeak),
+        "weekday_peak": int(offpeak if peak is None else peak),
+        "weekend_day": int(offpeak if weekend is None else weekend),
+        "late_night": int(offpeak if late_night is None else late_night),
+    }
+
+
 def add(name, stations, loop=False, service=None, base_name=None):
     """stations: [(駅名, 次駅までの分), ...] 最後の駅のtimeはloop時のみ使用"""
     service = service or infer_service(name)
@@ -39,7 +73,7 @@ def add(name, stations, loop=False, service=None, base_name=None):
         "base_name": base_name,
         "service": service,
         "operator": _operator,
-        "stations": stations,
+        "stations": normalize_station_times(stations, service),
         "loop": loop,
     })
 
@@ -48,12 +82,12 @@ operator("JR")
 # === JR山手線 ===
 # 全周約60分。実際の駅間時間に基づく
 add("JR山手線", [
-    ("東京",2),("神田",2),("秋葉原",2),("御徒町",2),("上野",2),
-    ("鶯谷",2),("日暮里",2),("西日暮里",2),("田端",2),("駒込",2),
-    ("巣鴨",1),("大塚",2),("池袋",3),("目白",2),("高田馬場",2),
-    ("新大久保",2),("新宿",2),("代々木",1),("原宿",2),("渋谷",2),
-    ("恵比寿",2),("目黒",2),("五反田",2),("大崎",3),("品川",3),
-    ("高輪ゲートウェイ",2),("田町",3),("浜松町",2),("新橋",2),("有楽町",2),
+    ("東京", band(2, 3, 2, 4)),("神田", band(2, 3, 2, 4)),("秋葉原", band(2, 3, 2, 3)),("御徒町", band(2, 3, 2, 3)),("上野", band(2, 3, 2, 4)),
+    ("鶯谷", band(2, 3, 2, 3)),("日暮里", band(2, 3, 2, 3)),("西日暮里", band(2, 3, 2, 3)),("田端", band(2, 3, 2, 3)),("駒込", band(2, 3, 2, 3)),
+    ("巣鴨", band(1, 2, 1, 2)),("大塚", band(2, 3, 2, 3)),("池袋", band(3, 4, 3, 5)),("目白", band(2, 3, 2, 3)),("高田馬場", band(2, 3, 2, 3)),
+    ("新大久保", band(2, 3, 2, 3)),("新宿", band(2, 3, 2, 4)),("代々木", band(1, 2, 1, 2)),("原宿", band(2, 3, 2, 3)),("渋谷", band(2, 3, 2, 4)),
+    ("恵比寿", band(2, 3, 2, 3)),("目黒", band(2, 3, 2, 3)),("五反田", band(2, 3, 2, 3)),("大崎", band(3, 4, 3, 4)),("品川", band(3, 4, 3, 5)),
+    ("高輪ゲートウェイ", band(2, 3, 2, 3)),("田町", band(3, 4, 3, 4)),("浜松町", band(2, 3, 2, 3)),("新橋", band(2, 3, 2, 3)),("有楽町", band(2, 3, 2, 3)),
 ], loop=True)
 
 # === JR京浜東北線 ===
@@ -71,10 +105,10 @@ add("JR京浜東北線", [
 # === JR中央線快速 ===
 # 東京→新宿 約15分
 add("JR中央線快速", [
-    ("東京",2),("神田",1),("御茶ノ水",3),("四ツ谷",5),("新宿",5),
-    ("中野",4),("高円寺",2),("阿佐ヶ谷",2),("荻窪",2),("西荻窪",2),
-    ("吉祥寺",3),("三鷹",2),("武蔵境",3),("東小金井",2),("武蔵小金井",3),
-    ("国分寺",3),("西国分寺",2),("国立",3),("立川",4),
+    ("東京", band(2, 3, 2, 4)),("神田", band(1, 2, 1, 2)),("御茶ノ水", band(3, 4, 3, 5)),("四ツ谷", band(5, 6, 5, 7)),("新宿", band(5, 7, 5, 7)),
+    ("中野", band(4, 5, 4, 6)),("高円寺", band(2, 3, 2, 4)),("阿佐ヶ谷", band(2, 3, 2, 4)),("荻窪", band(2, 3, 2, 4)),("西荻窪", band(2, 3, 2, 3)),
+    ("吉祥寺", band(3, 4, 3, 4)),("三鷹", band(2, 3, 2, 3)),("武蔵境", band(3, 4, 3, 4)),("東小金井", band(2, 3, 2, 3)),("武蔵小金井", band(3, 4, 3, 4)),
+    ("国分寺", band(3, 4, 3, 4)),("西国分寺", band(2, 3, 2, 3)),("国立", band(3, 4, 3, 4)),("立川", band(4, 5, 4, 5)),
 ])
 
 # === JR中央・総武線各停 ===
@@ -272,8 +306,8 @@ add("小田急小田原線", [
 ])
 
 add("小田急小田原線 急行", [
-    ("新宿",3),("代々木上原",3),("下北沢",4),("経堂",6),
-    ("成城学園前",6),("登戸",7),("新百合ヶ丘",7),("町田",5),
+    ("新宿", band(3, 5, 3, 5)),("代々木上原", band(3, 4, 3, 4)),("下北沢", band(4, 5, 4, 5)),("経堂", band(6, 7, 6, 8)),
+    ("成城学園前", band(6, 8, 6, 8)),("登戸", band(7, 8, 7, 9)),("新百合ヶ丘", band(7, 8, 7, 8)),("町田", band(5, 6, 5, 6)),
 ], service="急行", base_name="小田急小田原線")
 
 # === 京王線 ===
@@ -290,8 +324,8 @@ add("京王線", [
 ])
 
 add("京王線 特急", [
-    ("新宿",4),("明大前",7),("千歳烏山",7),("調布",7),
-    ("府中",5),("聖蹟桜ヶ丘",5),("高幡不動",5),("北野",3),("京王八王子",3),
+    ("新宿", band(4, 6, 4, 6)),("明大前", band(7, 8, 7, 8)),("千歳烏山", band(7, 8, 7, 8)),("調布", band(7, 9, 7, 9)),
+    ("府中", band(5, 6, 5, 6)),("聖蹟桜ヶ丘", band(5, 6, 5, 6)),("高幡不動", band(5, 6, 5, 6)),("北野", band(3, 4, 3, 4)),("京王八王子", band(3, 4, 3, 4)),
 ], service="特急", base_name="京王線")
 
 # === 京王井の頭線 ===
@@ -842,7 +876,28 @@ add("多摩モノレール", [
 def save():
     order = {"JR": 0, "東京メトロ": 1, "都営": 2, "私鉄・その他": 3}
     sorted_lines = sorted(lines, key=lambda l: order.get(l["operator"], 99))
-    data = {"transfer_time": 5, "station_aliases": station_aliases, "lines": sorted_lines}
+    data = {
+        "transfer_time": 5,
+        "default_time_band": "weekday_offpeak",
+        "time_bands": {
+            "weekday_offpeak": {"label": "平日日中"},
+            "weekday_peak": {"label": "平日ラッシュ"},
+            "weekend_day": {"label": "土休日昼間"},
+            "late_night": {"label": "深夜帯"},
+        },
+        "transfer_overrides": {
+            "新宿": 8,
+            "東京": 9,
+            "大手町": 8,
+            "池袋": 7,
+            "渋谷": 7,
+            "品川": 7,
+            "多摩センター": 6,
+            "永山": 6,
+        },
+        "station_aliases": station_aliases,
+        "lines": sorted_lines,
+    }
     out = Path(__file__).parent / "data" / "network.json"
     out.parent.mkdir(exist_ok=True)
     with open(out, "w", encoding="utf-8") as f:

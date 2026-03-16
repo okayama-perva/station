@@ -6,48 +6,117 @@
 <title>駅到達圏検索</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: -apple-system, 'Segoe UI', sans-serif; background: #f0f2f5; color: #333; }
-  .container { max-width: 800px; margin: 0 auto; padding: 20px; }
-  h1 { text-align: center; margin: 20px 0; font-size: 1.5rem; }
-  .form-card {
-    background: #fff; border-radius: 12px; padding: 24px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-bottom: 20px;
+  :root {
+    --bg: #f6f7fb;
+    --card: #ffffff;
+    --ink: #1f2937;
+    --muted: #6b7280;
+    --line: #dbe2ea;
+    --brand: #0f766e;
+    --brand-soft: #e3f5f2;
+    --warm: #fff1db;
   }
+  body { font-family: "Segoe UI", "Hiragino Sans", sans-serif; background: linear-gradient(180deg, #eef6f4 0%, var(--bg) 100%); color: var(--ink); }
+  .container { max-width: 980px; margin: 0 auto; padding: 24px 18px 40px; }
+  h1 { text-align: center; margin: 18px 0 22px; font-size: 1.8rem; letter-spacing: 0.03em; }
+  .form-card, .result-card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    box-shadow: 0 16px 40px rgba(15, 23, 42, 0.06);
+  }
+  .form-card { padding: 22px; margin-bottom: 18px; }
   .form-row { display: flex; gap: 12px; flex-wrap: wrap; align-items: end; }
-  .form-group { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 140px; }
-  .form-group label { font-size: 0.85rem; font-weight: 600; color: #555; }
-  input, select { padding: 10px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 1rem; }
-  input:focus, select:focus { outline: none; border-color: #4a90d9; }
+  .form-group { display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 150px; }
+  .form-group label { font-size: 0.85rem; font-weight: 700; color: var(--muted); }
+  .input-wrap { position: relative; flex: 1.4; min-width: 180px; }
+  input, select {
+    padding: 12px 14px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    font-size: 0.98rem;
+    background: #fff;
+  }
+  input:focus, select:focus { outline: none; border-color: var(--brand); box-shadow: 0 0 0 4px rgba(15, 118, 110, 0.12); }
   button {
-    padding: 10px 24px; background: #4a90d9; color: #fff; border: none;
-    border-radius: 8px; font-size: 1rem; cursor: pointer; white-space: nowrap;
+    padding: 12px 22px;
+    background: var(--brand);
+    color: #fff;
+    border: none;
+    border-radius: 12px;
+    font-size: 1rem;
+    font-weight: 700;
+    cursor: pointer;
+    white-space: nowrap;
   }
-  button:hover { background: #3a7bc8; }
-  .info { text-align: center; color: #888; padding: 40px 0; }
+  button:hover { filter: brightness(0.95); }
+  #suggestions {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    right: 0;
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    max-height: 220px;
+    overflow-y: auto;
+    z-index: 10;
+    box-shadow: 0 18px 40px rgba(15, 23, 42, 0.12);
+  }
+  #suggestions div { padding: 10px 12px; cursor: pointer; }
+  #suggestions div:hover { background: #f2fbfa; }
+  .loading, .info, .error { text-align: center; padding: 36px 0; color: var(--muted); }
+  .error { color: #b91c1c; }
+  .result-card { padding: 18px; }
   .result-header {
-    display: flex; justify-content: space-between; align-items: center;
-    margin-bottom: 12px; padding-bottom: 8px; border-bottom: 2px solid #4a90d9;
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    align-items: center;
+    margin-bottom: 12px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid var(--brand-soft);
   }
-  .result-header h2 { font-size: 1.1rem; }
-  .count { background: #4a90d9; color: #fff; padding: 4px 12px; border-radius: 20px; font-size: 0.9rem; }
+  .result-header h2 { font-size: 1.05rem; line-height: 1.5; }
+  .count {
+    background: var(--brand);
+    color: #fff;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 0.85rem;
+    font-weight: 700;
+  }
+  .meta-note { font-size: 0.9rem; color: var(--muted); margin-bottom: 10px; }
+  .group-card { border: 1px solid var(--line); border-radius: 16px; margin-top: 14px; overflow: hidden; }
+  .group-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 14px;
+    background: #f8fbfb;
+    border-bottom: 1px solid var(--line);
+  }
+  .group-title { display: flex; gap: 8px; align-items: center; font-weight: 700; flex-wrap: wrap; }
+  .service-badge { background: var(--brand-soft); color: var(--brand); padding: 3px 9px; border-radius: 999px; font-size: 0.75rem; font-weight: 700; }
   table { width: 100%; border-collapse: collapse; }
-  th { background: #f8f9fa; text-align: left; padding: 10px 12px; font-size: 0.85rem; color: #666; position: sticky; top: 0; }
-  td { padding: 10px 12px; border-bottom: 1px solid #eee; font-size: 0.9rem; }
-  tr:hover td { background: #f8fbff; }
-  .time-badge { background: #e8f4e8; color: #2d7a2d; padding: 2px 8px; border-radius: 4px; font-weight: 600; }
-  .transfer-badge { background: #fff3e0; color: #e65100; padding: 2px 8px; border-radius: 4px; }
-  .route { color: #888; font-size: 0.8rem; max-width: 300px; word-break: break-all; }
-  .error { color: #d32f2f; text-align: center; padding: 20px; }
-  .loading { text-align: center; padding: 40px; color: #888; }
-  .group-card { border: 1px solid #e7ebf0; border-radius: 12px; margin-top: 14px; overflow: hidden; }
-  .group-head { display: flex; justify-content: space-between; align-items: center; padding: 12px 14px; background: #f8fbff; border-bottom: 1px solid #e7ebf0; }
-  .group-title { display: flex; gap: 8px; align-items: center; font-weight: 700; }
-  .service-badge { background: #eaf1ff; color: #2452a3; padding: 3px 8px; border-radius: 999px; font-size: 0.75rem; font-weight: 700; }
-  #suggestions { position: absolute; background: #fff; border: 1px solid #ddd; border-radius: 8px;
-    max-height: 200px; overflow-y: auto; z-index: 10; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
-  #suggestions div { padding: 8px 12px; cursor: pointer; }
-  #suggestions div:hover { background: #f0f4ff; }
-  .input-wrap { position: relative; flex: 1; min-width: 140px; }
+  th { background: #fbfcfd; text-align: left; padding: 10px 12px; font-size: 0.84rem; color: var(--muted); }
+  td { padding: 10px 12px; border-top: 1px solid #eef2f7; font-size: 0.92rem; vertical-align: top; }
+  tr:hover td { background: #fcfefe; }
+  .time-badge { background: #e8f7ef; color: #166534; padding: 2px 8px; border-radius: 8px; font-weight: 700; }
+  .transfer-badge { background: var(--warm); color: #9a3412; padding: 2px 8px; border-radius: 8px; font-weight: 700; }
+  .route { color: var(--muted); font-size: 0.84rem; word-break: break-word; }
+  @media (max-width: 720px) {
+    .result-header, .group-head { align-items: flex-start; flex-direction: column; }
+    table, thead, tbody, tr, th, td { display: block; width: 100%; }
+    thead { display: none; }
+    td { padding: 8px 12px; }
+    td::before { display: inline-block; width: 72px; color: var(--muted); font-weight: 700; }
+    td:nth-child(1)::before { content: "駅名"; }
+    td:nth-child(2)::before { content: "時間"; }
+    td:nth-child(3)::before { content: "乗換"; }
+    td:nth-child(4)::before { content: "経路"; }
+  }
 </style>
 </head>
 <body>
@@ -56,36 +125,44 @@
   <div class="form-card">
     <div class="form-row">
       <div class="form-group input-wrap">
-        <label>目的駅</label>
-        <input type="text" id="target" placeholder="例: 渋谷" autocomplete="off">
+        <label for="target">出発駅</label>
+        <input type="text" id="target" placeholder="例: 新宿" autocomplete="off">
         <div id="suggestions"></div>
       </div>
       <div class="form-group">
-        <label>所要時間（分）</label>
-        <input type="number" id="time" value="30" min="1" max="120">
+        <label for="time">最大時間（分）</label>
+        <input type="number" id="time" value="30" min="1" max="180">
       </div>
       <div class="form-group">
-        <label>乗り換え上限</label>
+        <label for="transfers">乗換回数</label>
         <select id="transfers">
           <option value="">制限なし</option>
-          <option value="0">0回（直通のみ）</option>
+          <option value="0">0回</option>
           <option value="1">1回まで</option>
           <option value="2">2回まで</option>
           <option value="3">3回まで</option>
         </select>
       </div>
       <div class="form-group">
-        <label>種別</label>
+        <label for="service">種別</label>
         <select id="service">
           <option value="all">すべて</option>
-          <option value="local">各駅停車のみ</option>
+          <option value="local">普通のみ</option>
           <option value="express">急行・特急系のみ</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="time_band">時間帯</label>
+        <select id="time_band">
+          {% for key, meta in time_bands.items() %}
+          <option value="{{ key }}" {% if key == default_time_band %}selected{% endif %}>{{ meta.label }}</option>
+          {% endfor %}
         </select>
       </div>
       <button onclick="doSearch()">検索</button>
     </div>
   </div>
-  <div id="results"><p class="info">駅名と時間を入力して検索してください</p></div>
+  <div id="results"><p class="info">駅名と条件を入れて検索してください</p></div>
 </div>
 <script>
 const stations = {{ stations | tojson }};
@@ -93,24 +170,27 @@ const input = document.getElementById('target');
 const sugBox = document.getElementById('suggestions');
 
 input.addEventListener('input', () => {
-  const v = input.value.trim();
+  const value = input.value.trim();
   sugBox.innerHTML = '';
-  if (!v) return;
-  const hits = stations.filter(s => s.includes(v)).slice(0, 15);
-  hits.forEach(s => {
-    const d = document.createElement('div');
-    d.textContent = s;
-    d.onclick = () => { input.value = s; sugBox.innerHTML = ''; };
-    sugBox.appendChild(d);
+  if (!value) return;
+  const hits = stations.filter(name => name.includes(value)).slice(0, 15);
+  hits.forEach(name => {
+    const item = document.createElement('div');
+    item.textContent = name;
+    item.onclick = () => {
+      input.value = name;
+      sugBox.innerHTML = '';
+    };
+    sugBox.appendChild(item);
   });
 });
 
-document.addEventListener('click', e => {
-  if (!e.target.closest('.input-wrap')) sugBox.innerHTML = '';
+document.addEventListener('click', event => {
+  if (!event.target.closest('.input-wrap')) sugBox.innerHTML = '';
 });
 
-input.addEventListener('keydown', e => {
-  if (e.key === 'Enter') doSearch();
+input.addEventListener('keydown', event => {
+  if (event.key === 'Enter') doSearch();
 });
 
 async function doSearch() {
@@ -118,49 +198,54 @@ async function doSearch() {
   const time = document.getElementById('time').value;
   const transfers = document.getElementById('transfers').value;
   const service = document.getElementById('service').value;
+  const timeBand = document.getElementById('time_band').value;
   if (!target) return;
 
-  const res = document.getElementById('results');
-  res.innerHTML = '<p class="loading">検索中...</p>';
+  const resultArea = document.getElementById('results');
+  resultArea.innerHTML = '<p class="loading">検索中...</p>';
 
-  const params = new URLSearchParams({ target, time });
+  const params = new URLSearchParams({ target, time, time_band: timeBand });
   if (transfers !== '') params.set('transfers', transfers);
   if (service !== 'all') params.set('service', service);
 
-  const resp = await fetch('/search?' + params);
-  const data = await resp.json();
+  const response = await fetch('/search?' + params.toString());
+  const data = await response.json();
 
   if (data.error) {
-    res.innerHTML = '<p class="error">' + data.error + '</p>';
+    resultArea.innerHTML = '<p class="error">' + data.error + '</p>';
     return;
   }
 
-  const transferLabel = transfers === '' ? '制限なし' : transfers + '回以内';
-  const serviceLabel = service === 'all' ? 'すべて' : (service === 'local' ? '各駅停車のみ' : '急行・特急系のみ');
-  let html = '<div class="form-card"><div class="result-header">' +
-    '<h2>' + target + ' まで ' + time + '分以内（乗換: ' + transferLabel + ' / 種別: ' + serviceLabel + '）</h2>' +
-    '<span class="count">' + data.count + '駅</span></div>';
+  const transferLabel = transfers === '' ? '制限なし' : (transfers + '回まで');
+  const serviceLabel = service === 'all' ? 'すべて' : (service === 'local' ? '普通のみ' : '急行・特急系のみ');
+  let html = '<div class="result-card"><div class="result-header">' +
+    '<h2>' + data.target + ' まで ' + time + '分以内</h2>' +
+    '<span class="count">' + data.count + '駅</span></div>' +
+    '<p class="meta-note">種別: ' + serviceLabel + ' / 乗換: ' + transferLabel + ' / 時間帯: ' + data.time_band_label + '</p>';
 
   if (data.count === 0) {
-    html += '<p class="info">該当する駅がありません</p></div>';
-  } else {
-    data.groups.forEach(group => {
-      html += '<div class="group-card">';
-      html += '<div class="group-head"><div class="group-title"><span>' + group.line +
-        '</span><span class="service-badge">' + group.service + '</span></div>' +
-        '<span class="count">' + group.count + '駅</span></div>';
-      html += '<table><tr><th>駅名</th><th>時間</th><th>乗換</th><th>経路</th></tr>';
-      group.results.forEach(r => {
-        html += '<tr><td><strong>' + r.station + '</strong></td>' +
-          '<td><span class="time-badge">' + r.time + '分</span></td>' +
-          '<td><span class="transfer-badge">' + r.transfers + '回</span></td>' +
-          '<td class="route">' + r.route + '</td></tr>';
-      });
-      html += '</table></div>';
-    });
-    html += '</div>';
+    html += '<p class="info">条件に合う駅はありませんでした</p></div>';
+    resultArea.innerHTML = html;
+    return;
   }
-  res.innerHTML = html;
+
+  data.groups.forEach(group => {
+    html += '<div class="group-card">';
+    html += '<div class="group-head"><div class="group-title"><span>' + group.line +
+      '</span><span class="service-badge">' + group.service + '</span></div>' +
+      '<span class="count">' + group.count + '駅</span></div>';
+    html += '<table><thead><tr><th>駅名</th><th>時間</th><th>乗換</th><th>経路</th></tr></thead><tbody>';
+    group.results.forEach(item => {
+      html += '<tr><td><strong>' + item.station + '</strong></td>' +
+        '<td><span class="time-badge">' + item.time + '分</span></td>' +
+        '<td><span class="transfer-badge">' + item.transfers + '回</span></td>' +
+        '<td class="route">' + item.route + '</td></tr>';
+    });
+    html += '</tbody></table></div>';
+  });
+
+  html += '</div>';
+  resultArea.innerHTML = html;
 }
 </script>
 </body>
