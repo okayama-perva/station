@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>駅到達圏検索</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   :root {
@@ -17,7 +18,7 @@
     --warm: #fff1db;
   }
   body { font-family: "Segoe UI", "Hiragino Sans", sans-serif; background: linear-gradient(180deg, #eef6f4 0%, var(--bg) 100%); color: var(--ink); }
-  .container { max-width: 980px; margin: 0 auto; padding: 24px 18px 40px; }
+  .container { max-width: 1440px; margin: 0 auto; padding: 24px 18px 40px; }
   h1 { text-align: center; margin: 18px 0 22px; font-size: 1.8rem; letter-spacing: 0.03em; }
   .form-card, .result-card {
     background: var(--card);
@@ -68,6 +69,52 @@
   .loading, .info, .error { text-align: center; padding: 36px 0; color: var(--muted); }
   .error { color: #b91c1c; }
   .result-card { padding: 18px; }
+  .results-shell { display: grid; grid-template-columns: minmax(340px, 0.95fr) minmax(520px, 1.45fr); gap: 18px; align-items: start; }
+  .result-main { min-width: 0; }
+  .map-panel {
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    background: #fcfefe;
+    overflow: hidden;
+    position: sticky;
+    top: 18px;
+  }
+  .map-panel h3 { padding: 12px 14px; font-size: 0.95rem; border-bottom: 1px solid var(--line); background: #f8fbfb; }
+  #map { height: 680px; width: 100%; }
+  .map-note { padding: 10px 14px; color: var(--muted); font-size: 0.84rem; border-top: 1px solid var(--line); }
+  .map-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 14px;
+    padding: 10px 14px 0;
+    color: var(--ink);
+    font-size: 0.82rem;
+  }
+  .legend-item { display: inline-flex; align-items: center; gap: 7px; }
+  .legend-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 999px;
+    border: 2px solid #0f172a;
+    display: inline-block;
+  }
+  .map-pin-node,
+  .map-pin-target {
+    border-radius: 999px;
+    border: 3px solid #0f172a;
+    box-shadow: 0 4px 10px rgba(15, 23, 42, 0.28);
+  }
+  .map-pin-node {
+    width: 18px;
+    height: 18px;
+  }
+  .map-pin-target {
+    width: 24px;
+    height: 24px;
+    border-color: #134e4a;
+    background: #14b8a6;
+    box-shadow: 0 0 0 4px rgba(20, 184, 166, 0.2);
+  }
   .result-header {
     display: flex;
     justify-content: space-between;
@@ -107,6 +154,9 @@
   .transfer-badge { background: var(--warm); color: #9a3412; padding: 2px 8px; border-radius: 8px; font-weight: 700; }
   .route { color: var(--muted); font-size: 0.84rem; word-break: break-word; }
   @media (max-width: 720px) {
+    .results-shell { grid-template-columns: 1fr; }
+    .map-panel { position: static; }
+    #map { height: 380px; }
     .result-header, .group-head { align-items: flex-start; flex-direction: column; }
     table, thead, tbody, tr, th, td { display: block; width: 100%; }
     thead { display: none; }
@@ -162,6 +212,9 @@
   <div id="results"><p class="info">終着駅と条件を入れて検索してください</p></div>
 </div>
 <script>
+let mapInstance = null;
+let markerLayer = null;
+
 const stations = {{ stations | tojson }};
 const input = document.getElementById('target');
 const sugBox = document.getElementById('suggestions');
@@ -213,15 +266,28 @@ async function doSearch() {
   }
 
   const transferLabel = transfers === '' ? '制限なし' : (transfers + '回まで');
-  const serviceLabel = service === 'all' ? 'すべて' : (service === 'local' ? '普通のみ' : '優等のみ（急行・快速・特急など）');
+  const serviceLabel =
+    service === 'all' ? '通常（新幹線除外）'
+    : service === 'all_shinkansen' ? 'すべて（新幹線含む）'
+    : service === 'local' ? '普通のみ'
+    : '優等のみ（急行・快速・特急など）';
   let html = '<div class="result-card"><div class="result-header">' +
     '<h2>' + data.target + ' へ ' + time + '分以内</h2>' +
     '<span class="count">' + data.count + '駅</span></div>' +
-    '<p class="meta-note">種別: ' + serviceLabel + ' / 乗換: ' + transferLabel + '</p>';
+    '<p class="meta-note">種別: ' + serviceLabel + ' / 乗換: ' + transferLabel + '</p>' +
+    '<div class="results-shell"><div class="result-main">';
 
   if (data.count === 0) {
-    html += '<p class="info">条件に合う駅はありませんでした</p></div>';
+    html += '<p class="info">条件に合う駅はありませんでした</p></div>' +
+      '<div class="map-panel"><h3>マップ</h3><div id="map"></div>' +
+      '<div class="map-legend">' +
+      '<span class="legend-item"><span class="legend-dot" style="background:#16a34a"></span>10分以内</span>' +
+      '<span class="legend-item"><span class="legend-dot" style="background:#2563eb"></span>20分以内</span>' +
+      '<span class="legend-item"><span class="legend-dot" style="background:#f59e0b"></span>30分以内</span>' +
+      '<span class="legend-item"><span class="legend-dot" style="background:#ef4444"></span>30分超</span>' +
+      '</div><p class="map-note">座標付きの駅があるとここに表示されます。描画対象: ' + ((data.results || []).filter(item => item.lat != null && item.lng != null).length) + '駅</p></div></div></div>';
     resultArea.innerHTML = html;
+    renderMap(data);
     return;
   }
 
@@ -240,9 +306,134 @@ async function doSearch() {
     html += '</tbody></table></div>';
   });
 
-  html += '</div>';
+  html += '</div><div class="map-panel"><h3>到達駅マップ</h3><div id="map"></div>' +
+    '<div class="map-legend">' +
+    '<span class="legend-item"><span class="legend-dot" style="background:#16a34a"></span>10分以内</span>' +
+    '<span class="legend-item"><span class="legend-dot" style="background:#2563eb"></span>20分以内</span>' +
+    '<span class="legend-item"><span class="legend-dot" style="background:#f59e0b"></span>30分以内</span>' +
+    '<span class="legend-item"><span class="legend-dot" style="background:#ef4444"></span>30分超</span>' +
+    '</div>' +
+    '<p class="map-note">終着駅を強調表示し、到達駅を所要時間ごとに色分けします。描画対象: ' + ((data.results || []).filter(item => item.lat != null && item.lng != null).length) + '駅</p></div></div></div>';
   resultArea.innerHTML = html;
+  renderMap(data);
+}
+
+function markerColor(minutes) {
+  if (minutes <= 10) return "#16a34a";
+  if (minutes <= 20) return "#2563eb";
+  if (minutes <= 30) return "#f59e0b";
+  return "#ef4444";
+}
+
+function popupHtml(item) {
+  return "<strong>" + item.station + "</strong><br>" +
+    (item.time || 0) + "? / " + (item.transfers || 0) + "?<br>" +
+    item.base_line + " [" + item.service + "]<br>" +
+    item.route;
+}
+
+function renderMap(data) {
+  const mapEl = document.getElementById("map");
+  if (!mapEl || typeof L === "undefined") return;
+
+  const target = data.target_coords;
+  const points = (data.results || []).filter(item => item.lat != null && item.lng != null);
+
+  if (mapInstance && mapInstance._container !== mapEl) {
+    mapInstance.remove();
+    mapInstance = null;
+    markerLayer = null;
+  }
+
+  if (!mapInstance) {
+    mapInstance = L.map(mapEl, { zoomControl: true }).setView([35.681236, 139.767125], 11);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19,
+      attribution: "&copy; OpenStreetMap contributors"
+    }).addTo(mapInstance);
+  }
+
+  if (markerLayer) {
+    markerLayer.remove();
+  }
+
+  const features = [];
+
+  if (target && target.lat != null && target.lng != null) {
+    features.push({
+      type: "Feature",
+      geometry: { type: "Point", coordinates: [target.lng, target.lat] },
+      properties: {
+        station: data.target,
+        time: 0,
+        transfers: 0,
+        base_line: "Target",
+        service: "Target",
+        route: "Target",
+        isTarget: true
+      }
+    });
+  }
+
+  points.forEach(item => {
+    features.push({
+      type: "Feature",
+      geometry: { type: "Point", coordinates: [item.lng, item.lat] },
+      properties: {
+        station: item.station,
+        time: item.time,
+        transfers: item.transfers,
+        base_line: item.base_line,
+        service: item.service,
+        route: item.route,
+        isTarget: false
+      }
+    });
+  });
+
+  markerLayer = L.geoJSON(features, {
+    pointToLayer: (feature, latlng) => {
+      const props = feature.properties || {};
+      return L.circleMarker(latlng, {
+        radius: props.isTarget ? 10 : 7,
+        color: props.isTarget ? "#134e4a" : "#0f172a",
+        weight: props.isTarget ? 3 : 2,
+        fillColor: props.isTarget ? "#14b8a6" : markerColor(props.time || 0),
+        fillOpacity: 0.95
+      });
+    },
+    onEachFeature: (feature, layer) => {
+      layer.bindPopup(popupHtml(feature.properties || {}));
+    }
+  }).addTo(mapInstance);
+
+  requestAnimationFrame(() => {
+    mapInstance.invalidateSize();
+    const note = mapEl.parentElement ? mapEl.parentElement.querySelector(".map-note") : null;
+    if (note) {
+      const layerCount = markerLayer && markerLayer.getLayers ? markerLayer.getLayers().length : -1;
+      const first = data.results && data.results.length ? data.results[0] : null;
+      const targetDebug = data.target_coords ? ("target=(" + data.target_coords.lat + "," + data.target_coords.lng + ")") : "target=null";
+      const firstDebug = first ? ("first=" + first.station + " lat=" + first.lat + " lng=" + first.lng) : "first=null";
+      note.textContent = "debug coords=" + points.length + " features=" + features.length + " layers=" + layerCount + " " + targetDebug + " " + firstDebug;
+    }
+    if (features.length === 0) {
+      mapInstance.setView([35.681236, 139.767125], 11);
+      return;
+    }
+    const bounds = markerLayer.getBounds();
+    if (!bounds.isValid()) {
+      mapInstance.setView([35.681236, 139.767125], 11);
+      return;
+    }
+    if (features.length === 1) {
+      mapInstance.setView(bounds.getCenter(), 14);
+      return;
+    }
+    mapInstance.fitBounds(bounds, { padding: [24, 24], maxZoom: 15 });
+  });
 }
 </script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 </body>
 </html>

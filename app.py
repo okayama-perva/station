@@ -15,6 +15,7 @@ app = Flask(__name__)
 
 network = load_network()
 station_aliases = network.get("station_aliases", {})
+station_coordinates = network.get("station_coordinates", {})
 graph, station_lines, transfer_context, line_catalog = build_graph(network)
 all_stations = sorted(set(station_lines.keys()) | set(station_aliases.keys()))
 
@@ -75,6 +76,8 @@ def search():
             "base_line": base_name,
             "service": service,
             "group_key": f"{base_name} [{service}]",
+            "lat": (station_coordinates.get(station) or {}).get("lat"),
+            "lng": (station_coordinates.get(station) or {}).get("lng"),
         }
         for station, (time, transfers, route, line_name, base_name, service) in results.items()
     ]
@@ -104,6 +107,7 @@ def search():
             "target": target,
             "input_target": raw_target,
             "count": len(items),
+            "target_coords": station_coordinates.get(target),
             "results": items,
             "groups": groups,
         }

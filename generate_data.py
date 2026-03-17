@@ -1,6 +1,7 @@
 """駅ネットワークデータ生成スクリプト - 路線を段階的に追加"""
 import json
 from pathlib import Path
+from statistics import mean
 
 lines = []
 _operator = None
@@ -11,6 +12,26 @@ station_aliases = {
     "小田急永山": "永山",
     "京王稲田堤": "稲田堤",
     "京王片倉": "片倉",
+}
+
+STATION_COORD_ALIASES = {
+    "京成江戸川": "江戸川",
+    "保土ケ谷": "保土ヶ谷",
+    "千駄ケ谷": "千駄ヶ谷",
+    "市ケ谷": "市ヶ谷",
+    "松原団地": "獨協大学前",
+    "笹塚": "笹塚",
+    "茅ケ崎": "茅ヶ崎",
+    "西ケ原": "西ヶ原",
+    "西武遊園地": "多摩湖",
+    "遊園地西": "西武園ゆうえんち",
+    "霞ケ関": "霞ヶ関",
+}
+
+OPERATOR_ALIASES = {
+    "JR": "東日本旅客鉄道",
+    "東京メトロ": "東京地下鉄",
+    "都営": "東京都",
 }
 
 def operator(name):
@@ -44,6 +65,139 @@ def normalize_station_times(stations, service):
 
 def band(offpeak, peak=None, weekend=None, late_night=None):
     return int(offpeak)
+
+
+def normalize_text(value: str) -> str:
+    return (
+        value.replace("　", "")
+        .replace(" ", "")
+        .replace("・", "")
+        .replace("ヶ", "ケ")
+        .replace("ヵ", "ケ")
+        .replace("之", "の")
+        .replace("塚", "塚")
+        .replace("〈", "")
+        .replace("〉", "")
+        .replace("(", "")
+        .replace(")", "")
+    )
+
+
+def normalize_line_name(value: str) -> str:
+    text = normalize_text(value)
+    for prefix in (
+        "JR",
+        "東京メトロ",
+        "都営",
+        "東急",
+        "京王",
+        "小田急",
+        "西武",
+        "東武",
+        "京急",
+        "京成",
+        "相鉄",
+        "横浜市営",
+        "埼玉高速鉄道",
+        "東京モノレール",
+    ):
+        text = text.replace(prefix, "")
+    for token in ("各駅停車", "各停", "通勤急行", "快特", "特急", "急行", "快速", "空港快速"):
+        text = text.replace(token, "")
+    return text
+
+
+def candidate_station_names(name: str) -> list[str]:
+    values = [name]
+    if name in station_aliases:
+        values.append(station_aliases[name])
+    if name in STATION_COORD_ALIASES:
+        values.append(STATION_COORD_ALIASES[name])
+    deduped = []
+    seen = set()
+    for item in values:
+        if item not in seen:
+            deduped.append(item)
+            seen.add(item)
+    return deduped
+
+
+def line_string_center(geometry: dict) -> tuple[float, float] | None:
+    coordinates = geometry.get("coordinates", [])
+    if not coordinates:
+        return None
+    points = coordinates
+    if geometry.get("type") == "MultiLineString":
+        points = [point for segment in coordinates for point in segment]
+    if not points:
+        return None
+    lng = mean(point[0] for point in points)
+    lat = mean(point[1] for point in points)
+    return lat, lng
+
+
+def build_station_coordinates(sorted_lines):
+    geo_path = Path(__file__).parent / "N02-24_Station.geojson"
+    if not geo_path.exists():
+        print(f"駅座標データ未検出: {geo_path}")
+        return {}
+
+    features = json.loads(geo_path.read_text(encoding="utf-8")).get("features", [])
+    by_name = {}
+    for feature in features:
+        props = feature.get("properties") or {}
+        station_name = props.get("N02_005")
+        if not station_name:
+            continue
+        center = line_string_center(feature.get("geometry") or {})
+        if center is None:
+            continue
+        by_name.setdefault(station_name, []).append(
+            {
+                "lat": center[0],
+                "lng": center[1],
+                "line": props.get("N02_003", ""),
+                "operator": props.get("N02_004", ""),
+            }
+        )
+
+    station_coords = {}
+
+    for line in sorted_lines:
+        operator_name = line.get("operator", "")
+        operator_alias = OPERATOR_ALIASES.get(operator_name, operator_name)
+        line_keys = {
+            normalize_line_name(line["name"]),
+            normalize_line_name(line.get("base_name", line["name"])),
+        }
+        for station_name, _minutes in line["stations"]:
+            canonical_name = station_aliases.get(station_name, station_name)
+            candidates = []
+            for candidate_name in candidate_station_names(station_name):
+                candidates.extend(by_name.get(candidate_name, []))
+                if candidate_name != canonical_name:
+                    candidates.extend(by_name.get(canonical_name, []))
+            if not candidates:
+                continue
+
+            def score(item):
+                operator_score = 1 if item["operator"] in {operator_name, operator_alias} else 0
+                geo_line_key = normalize_line_name(item["line"])
+                line_score = 2 if geo_line_key in line_keys else 1 if any(k and (k in geo_line_key or geo_line_key in k) for k in line_keys) else 0
+                return operator_score, line_score
+
+            best_score = max(score(item) for item in candidates)
+            matched = [item for item in candidates if score(item) == best_score]
+            lat = mean(item["lat"] for item in matched)
+            lng = mean(item["lng"] for item in matched)
+            station_coords.setdefault(canonical_name, []).append((lat, lng))
+
+    finalized = {
+        station: {"lat": round(mean(lat for lat, _lng in coords), 7), "lng": round(mean(lng for _lat, lng in coords), 7)}
+        for station, coords in station_coords.items()
+    }
+    print(f"駅座標付与: {len(finalized)}駅")
+    return finalized
 
 
 def add(name, stations, loop=False, service=None, base_name=None):
@@ -892,6 +1046,7 @@ add("多摩モノレール", [
 def save():
     order = {"JR": 0, "東京メトロ": 1, "都営": 2, "私鉄・その他": 3}
     sorted_lines = sorted(lines, key=lambda l: order.get(l["operator"], 99))
+    station_coordinates = build_station_coordinates(sorted_lines)
     data = {
         "transfer_time": 5,
         "transfer_overrides": {
@@ -905,6 +1060,7 @@ def save():
             "永山": 6,
         },
         "station_aliases": station_aliases,
+        "station_coordinates": station_coordinates,
         "lines": sorted_lines,
     }
     out = Path(__file__).parent / "data" / "network.json"
