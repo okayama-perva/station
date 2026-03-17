@@ -11,6 +11,7 @@ from typing import Any
 
 LOCAL_SERVICES = {"各駅停車", "各停", "普通"}
 EXPRESS_SERVICES = {"急行", "特急", "快速", "快特", "通勤急行"}
+SHINKANSEN_KEYWORD = "新幹線"
 
 
 def load_network(data_path: str | None = None) -> dict:
@@ -58,6 +59,14 @@ def resolve_transfer_time(
     return int(station_overrides.get("default", default_time))
 
 
+def is_shinkansen_line(meta: dict[str, Any] | None) -> bool:
+    if not meta:
+        return False
+    base_name = str(meta.get("base_name", ""))
+    line_name = str(meta.get("name", ""))
+    return SHINKANSEN_KEYWORD in base_name or SHINKANSEN_KEYWORD in line_name
+
+
 def build_graph(network: dict) -> tuple[dict, dict, dict, dict]:
     graph: dict[str, list] = {}
     station_lines: dict[str, set[str]] = {}
@@ -72,6 +81,7 @@ def build_graph(network: dict) -> tuple[dict, dict, dict, dict]:
     for line in network["lines"]:
         line_name = line["name"]
         line_catalog[line_name] = {
+            "name": line_name,
             "base_name": line.get("base_name", line_name),
             "service": line.get("service", "各駅停車"),
             "operator": line.get("operator"),
@@ -113,12 +123,16 @@ def search_reachable(
     transfer_context = transfer_context or {"default": 5, "overrides": {}}
     filter_mode = (service_filter or {}).get("mode")
     filter_services = set((service_filter or {}).get("services", set()))
+    exclude_shinkansen = bool((service_filter or {}).get("exclude_shinkansen"))
 
     pq: list[tuple[int, int, str, str, bool, list[str]]] = []
     best: dict[tuple[str, str, bool], tuple[int, int]] = {}
 
     for line in station_lines.get(target, set()):
-        service = line_catalog.get(line, {}).get("service", "各駅停車")
+        meta = line_catalog.get(line, {})
+        if exclude_shinkansen and is_shinkansen_line(meta):
+            continue
+        service = meta.get("service", "各駅停車")
         if filter_mode == "only" and service not in filter_services:
             continue
         used_match = service in filter_services if filter_mode == "contains" else True
@@ -155,7 +169,10 @@ def search_reachable(
             )
 
         for neighbor, segment_time, line_name in graph.get(station, []):
-            service = line_catalog.get(line_name, {}).get("service", "各駅停車")
+            meta = line_catalog.get(line_name, {})
+            if exclude_shinkansen and is_shinkansen_line(meta):
+                continue
+            service = meta.get("service", "各駅停車")
             if filter_mode == "only" and service not in filter_services:
                 continue
             next_used_match = used_match or (service in filter_services if filter_mode == "contains" else False)

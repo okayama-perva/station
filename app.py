@@ -27,11 +27,13 @@ def reverse_route(route: str) -> str:
 
 def parse_service_filter(value: str | None):
     if not value or value == "all":
+        return {"exclude_shinkansen": True}
+    if value == "all_shinkansen":
         return None
     if value == "local":
-        return {"mode": "only", "services": LOCAL_SERVICES}
+        return {"mode": "only", "services": LOCAL_SERVICES, "exclude_shinkansen": True}
     if value == "express":
-        return {"mode": "contains", "services": EXPRESS_SERVICES}
+        return {"mode": "contains", "services": EXPRESS_SERVICES, "exclude_shinkansen": True}
     return None
 
 

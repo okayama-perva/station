@@ -146,7 +146,8 @@
       <div class="form-group">
         <label for="service">種別</label>
         <select id="service">
-          <option value="all">すべて</option>
+          <option value="all">通常（新幹線除外）</option>
+          <option value="all_shinkansen">すべて（新幹線含む）</option>
           <option value="local">普通のみ</option>
           <option value="express">優等のみ（急行・快速・特急など）</option>
         </select>
@@ -154,7 +155,7 @@
       <button onclick="doSearch()">検索</button>
     </div>
     <p class="meta-note" style="margin-top: 12px;">
-      `優等のみ` は `急行 / 快速 / 特急 / 快特 / 通勤急行` をまとめて検索します。
+      `通常` は新幹線を除いた検索です。`優等のみ` は `急行 / 快速 / 特急 / 快特 / 通勤急行` をまとめて検索します。
       その路線に優等データが未登録なら結果には出ません。
     </p>
   </div>
