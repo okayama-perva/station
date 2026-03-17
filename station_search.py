@@ -108,37 +108,42 @@ def search_reachable(
     max_time: int,
     max_transfers: int | None = None,
     transfer_context: dict[str, Any] | None = None,
-    allowed_services: set[str] | None = None,
+    service_filter: dict[str, Any] | None = None,
 ):
     transfer_context = transfer_context or {"default": 5, "overrides": {}}
+    filter_mode = (service_filter or {}).get("mode")
+    filter_services = set((service_filter or {}).get("services", set()))
 
-    pq: list[tuple[int, int, str, str, list[str]]] = []
-    best: dict[tuple[str, str], tuple[int, int]] = {}
+    pq: list[tuple[int, int, str, str, bool, list[str]]] = []
+    best: dict[tuple[str, str, bool], tuple[int, int]] = {}
 
     for line in station_lines.get(target, set()):
         service = line_catalog.get(line, {}).get("service", "各駅停車")
-        if allowed_services and service not in allowed_services:
+        if filter_mode == "only" and service not in filter_services:
             continue
-        heapq.heappush(pq, (0, 0, target, line, [f"{target}({line})"]))
+        used_match = service in filter_services if filter_mode == "contains" else True
+        heapq.heappush(pq, (0, 0, target, line, used_match, [f"{target}({line})"]))
 
     results = {}
 
     while pq:
-        time, transfers, station, current_line, path = heapq.heappop(pq)
+        time, transfers, station, current_line, used_match, path = heapq.heappop(pq)
 
         if time > max_time:
             continue
         if max_transfers is not None and transfers > max_transfers:
             continue
 
-        state_key = (station, current_line)
+        state_key = (station, current_line, used_match)
         if state_key in best:
             best_time, best_transfers = best[state_key]
             if time > best_time or (time == best_time and transfers >= best_transfers):
                 continue
         best[state_key] = (time, transfers)
 
-        if station not in results or (time, transfers) < (results[station][0], results[station][1]):
+        if (filter_mode != "contains" or used_match) and (
+            station not in results or (time, transfers) < (results[station][0], results[station][1])
+        ):
             meta = line_catalog.get(current_line, {})
             results[station] = (
                 time,
@@ -151,8 +156,9 @@ def search_reachable(
 
         for neighbor, segment_time, line_name in graph.get(station, []):
             service = line_catalog.get(line_name, {}).get("service", "各駅停車")
-            if allowed_services and service not in allowed_services:
+            if filter_mode == "only" and service not in filter_services:
                 continue
+            next_used_match = used_match or (service in filter_services if filter_mode == "contains" else False)
 
             new_time = time + int(segment_time)
             if new_time > max_time:
@@ -170,20 +176,20 @@ def search_reachable(
                     continue
                 new_path = path + [f"乗換@{station}", f"{neighbor}({line_name})"]
 
-            next_state = (neighbor, line_name)
+            next_state = (neighbor, line_name, next_used_match)
             if next_state in best:
                 best_time, best_transfers = best[next_state]
                 if new_time > best_time or (new_time == best_time and new_transfers >= best_transfers):
                     continue
 
-            heapq.heappush(pq, (new_time, new_transfers, neighbor, line_name, new_path))
+            heapq.heappush(pq, (new_time, new_transfers, neighbor, line_name, next_used_match, new_path))
 
     return results
 
 
 def main():
     parser = argparse.ArgumentParser(description="駅到達圏検索")
-    parser.add_argument("target", help="出発駅")
+    parser.add_argument("target", help="終着駅")
     parser.add_argument("time", type=int, help="最大所要時間（分）")
     parser.add_argument("-t", "--transfers", type=int, default=None, help="最大乗換回数")
     parser.add_argument("-d", "--data", default=None, help="ネットワークデータ JSON パス")
@@ -217,7 +223,7 @@ def main():
     results.pop(target, None)
 
     if not results:
-        print(f"{target} まで {args.time} 分以内に到達できる駅はありません。")
+        print(f"{target} へ {args.time} 分以内に到達できる駅はありません。")
         return
 
     items = [
@@ -233,7 +239,7 @@ def main():
 
     transfer_label = f"乗換{args.transfers}回まで" if args.transfers is not None else "乗換制限なし"
     print(f"\n{'=' * 60}")
-    print(f" {target} まで {args.time}分以内 ({transfer_label})")
+    print(f" {target} へ {args.time}分以内 ({transfer_label})")
     print(f" 到達駅数: {len(items)}駅")
     print(f"{'=' * 60}")
     print(f" {'駅名':<10} {'時間':>5} {'乗換':>4}  経路")

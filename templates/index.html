@@ -125,8 +125,8 @@
   <div class="form-card">
     <div class="form-row">
       <div class="form-group input-wrap">
-        <label for="target">出発駅</label>
-        <input type="text" id="target" placeholder="例: 新宿" autocomplete="off">
+        <label for="target">終着駅</label>
+        <input type="text" id="target" placeholder="例: 渋谷" autocomplete="off">
         <div id="suggestions"></div>
       </div>
       <div class="form-group">
@@ -148,13 +148,17 @@
         <select id="service">
           <option value="all">すべて</option>
           <option value="local">普通のみ</option>
-          <option value="express">急行・特急系のみ</option>
+          <option value="express">優等のみ（急行・快速・特急など）</option>
         </select>
       </div>
       <button onclick="doSearch()">検索</button>
     </div>
+    <p class="meta-note" style="margin-top: 12px;">
+      `優等のみ` は `急行 / 快速 / 特急 / 快特 / 通勤急行` をまとめて検索します。
+      その路線に優等データが未登録なら結果には出ません。
+    </p>
   </div>
-  <div id="results"><p class="info">駅名と条件を入れて検索してください</p></div>
+  <div id="results"><p class="info">終着駅と条件を入れて検索してください</p></div>
 </div>
 <script>
 const stations = {{ stations | tojson }};
@@ -208,9 +212,9 @@ async function doSearch() {
   }
 
   const transferLabel = transfers === '' ? '制限なし' : (transfers + '回まで');
-  const serviceLabel = service === 'all' ? 'すべて' : (service === 'local' ? '普通のみ' : '急行・特急系のみ');
+  const serviceLabel = service === 'all' ? 'すべて' : (service === 'local' ? '普通のみ' : '優等のみ（急行・快速・特急など）');
   let html = '<div class="result-card"><div class="result-header">' +
-    '<h2>' + data.target + ' まで ' + time + '分以内</h2>' +
+    '<h2>' + data.target + ' へ ' + time + '分以内</h2>' +
     '<span class="count">' + data.count + '駅</span></div>' +
     '<p class="meta-note">種別: ' + serviceLabel + ' / 乗換: ' + transferLabel + '</p>';
 

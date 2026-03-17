@@ -1,4 +1,4 @@
-"""駅到達圏検索の Flask アプリ。"""
+﻿"""駅到達圏検索の Flask アプリ。"""
 
 from flask import Flask, jsonify, render_template, request
 
@@ -19,13 +19,19 @@ graph, station_lines, transfer_context, line_catalog = build_graph(network)
 all_stations = sorted(set(station_lines.keys()) | set(station_aliases.keys()))
 
 
+def reverse_route(route: str) -> str:
+    parts = [part for part in route.split(" -> ") if part]
+    parts.reverse()
+    return " -> ".join(parts)
+
+
 def parse_service_filter(value: str | None):
     if not value or value == "all":
         return None
     if value == "local":
-        return LOCAL_SERVICES
+        return {"mode": "only", "services": LOCAL_SERVICES}
     if value == "express":
-        return EXPRESS_SERVICES
+        return {"mode": "contains", "services": EXPRESS_SERVICES}
     return None
 
 
@@ -62,7 +68,7 @@ def search():
             "station": station,
             "time": time,
             "transfers": transfers,
-            "route": route,
+            "route": reverse_route(route),
             "line": line_name,
             "base_line": base_name,
             "service": service,
@@ -70,6 +76,8 @@ def search():
         }
         for station, (time, transfers, route, line_name, base_name, service) in results.items()
     ]
+    if service_filter == "express":
+        items = [item for item in items if item["service"] in EXPRESS_SERVICES]
     items.sort(key=lambda x: (x["time"], x["transfers"], x["station"]))
 
     groups = []
