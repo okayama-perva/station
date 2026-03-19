@@ -28,6 +28,24 @@ STATION_COORD_ALIASES = {
     "霞ケ関": "霞ヶ関",
 }
 
+STATION_COORD_HINTS = {
+    ("高田", "横浜市営グリーンライン"): {"line": "4号線", "operator": "横浜市"},
+    ("大山", "東武東上線"): {"line": "東上本線", "operator": "東武鉄道"},
+    ("北山田", "横浜市営グリーンライン"): {"line": "4号線", "operator": "横浜市"},
+    ("牛田", "東武スカイツリーライン"): {"line": "伊勢崎線", "operator": "東武鉄道"},
+    ("ときわ台", "東武東上線"): {"line": "東上本線", "operator": "東武鉄道"},
+    ("東雲", "りんかい線"): {"line": "臨海副都心線", "operator": "東京臨海高速鉄道"},
+    ("中田", "横浜市営ブルーライン"): {"line": "1号線", "operator": "横浜市"},
+    ("中山", "JR横浜線"): {"line": "横浜線", "operator": "東日本旅客鉄道"},
+    ("高津", "東急田園都市線"): {"line": "田園都市線", "operator": "東急電鉄"},
+    ("日吉", "東急東横線"): {"line": "東横線", "operator": "東急電鉄"},
+    ("高松", "多摩モノレール"): {"line": "多摩都市モノレール線", "operator": "多摩都市モノレール"},
+    ("有明", "ゆりかもめ"): {"line": "東京臨海新交通臨海線", "operator": "ゆりかもめ"},
+    ("青海", "ゆりかもめ"): {"line": "東京臨海新交通臨海線", "operator": "ゆりかもめ"},
+    ("新田", "東武スカイツリーライン"): {"line": "伊勢崎線", "operator": "東武鉄道"},
+    ("中川", "横浜市営ブルーライン"): {"line": "3号線", "operator": "横浜市"},
+    ("大久保", "JR中央・総武線"): {"line": "中央線", "operator": "東日本旅客鉄道"},
+}
 OPERATOR_ALIASES = {
     "JR": "東日本旅客鉄道",
     "東京メトロ": "東京地下鉄",
@@ -180,11 +198,19 @@ def build_station_coordinates(sorted_lines):
             if not candidates:
                 continue
 
+            hint = STATION_COORD_HINTS.get((canonical_name, line.get("base_name", line["name"])))
+
             def score(item):
                 operator_score = 1 if item["operator"] in {operator_name, operator_alias} else 0
                 geo_line_key = normalize_line_name(item["line"])
                 line_score = 2 if geo_line_key in line_keys else 1 if any(k and (k in geo_line_key or geo_line_key in k) for k in line_keys) else 0
-                return operator_score, line_score
+                hint_score = 0
+                if hint:
+                    if hint.get("operator") and item["operator"] == hint["operator"]:
+                        hint_score += 2
+                    if hint.get("line") and item["line"] == hint["line"]:
+                        hint_score += 3
+                return hint_score, operator_score, line_score
 
             best_score = max(score(item) for item in candidates)
             matched = [item for item in candidates if score(item) == best_score]

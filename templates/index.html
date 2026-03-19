@@ -17,7 +17,11 @@
     --brand-soft: #e3f5f2;
     --warm: #fff1db;
   }
-  body { font-family: "Segoe UI", "Hiragino Sans", sans-serif; background: linear-gradient(180deg, #eef6f4 0%, var(--bg) 100%); color: var(--ink); }
+  body {
+    font-family: "Segoe UI", "Hiragino Sans", sans-serif;
+    background: linear-gradient(180deg, #eef6f4 0%, var(--bg) 100%);
+    color: var(--ink);
+  }
   .container { max-width: 1440px; margin: 0 auto; padding: 24px 18px 40px; }
   h1 { text-align: center; margin: 18px 0 22px; font-size: 1.8rem; letter-spacing: 0.03em; }
   .form-card, .result-card {
@@ -38,7 +42,11 @@
     font-size: 0.98rem;
     background: #fff;
   }
-  input:focus, select:focus { outline: none; border-color: var(--brand); box-shadow: 0 0 0 4px rgba(15, 118, 110, 0.12); }
+  input:focus, select:focus {
+    outline: none;
+    border-color: var(--brand);
+    box-shadow: 0 0 0 4px rgba(15, 118, 110, 0.12);
+  }
   button {
     padding: 12px 22px;
     background: var(--brand);
@@ -69,7 +77,12 @@
   .loading, .info, .error { text-align: center; padding: 36px 0; color: var(--muted); }
   .error { color: #b91c1c; }
   .result-card { padding: 18px; }
-  .results-shell { display: grid; grid-template-columns: minmax(340px, 0.95fr) minmax(520px, 1.45fr); gap: 18px; align-items: start; }
+  .results-shell {
+    display: grid;
+    grid-template-columns: minmax(340px, 0.95fr) minmax(520px, 1.45fr);
+    gap: 18px;
+    align-items: start;
+  }
   .result-main { min-width: 0; }
   .map-panel {
     border: 1px solid var(--line);
@@ -79,9 +92,19 @@
     position: sticky;
     top: 18px;
   }
-  .map-panel h3 { padding: 12px 14px; font-size: 0.95rem; border-bottom: 1px solid var(--line); background: #f8fbfb; }
+  .map-panel h3 {
+    padding: 12px 14px;
+    font-size: 0.95rem;
+    border-bottom: 1px solid var(--line);
+    background: #f8fbfb;
+  }
   #map { height: 680px; width: 100%; }
-  .map-note { padding: 10px 14px; color: var(--muted); font-size: 0.84rem; border-top: 1px solid var(--line); }
+  .map-note {
+    padding: 10px 14px;
+    color: var(--muted);
+    font-size: 0.84rem;
+    border-top: 1px solid var(--line);
+  }
   .map-legend {
     display: flex;
     flex-wrap: wrap;
@@ -97,23 +120,6 @@
     border-radius: 999px;
     border: 2px solid #0f172a;
     display: inline-block;
-  }
-  .map-pin-node,
-  .map-pin-target {
-    border-radius: 999px;
-    border: 3px solid #0f172a;
-    box-shadow: 0 4px 10px rgba(15, 23, 42, 0.28);
-  }
-  .map-pin-node {
-    width: 18px;
-    height: 18px;
-  }
-  .map-pin-target {
-    width: 24px;
-    height: 24px;
-    border-color: #134e4a;
-    background: #14b8a6;
-    box-shadow: 0 0 0 4px rgba(20, 184, 166, 0.2);
   }
   .result-header {
     display: flex;
@@ -145,7 +151,14 @@
     border-bottom: 1px solid var(--line);
   }
   .group-title { display: flex; gap: 8px; align-items: center; font-weight: 700; flex-wrap: wrap; }
-  .service-badge { background: var(--brand-soft); color: var(--brand); padding: 3px 9px; border-radius: 999px; font-size: 0.75rem; font-weight: 700; }
+  .service-badge {
+    background: var(--brand-soft);
+    color: var(--brand);
+    padding: 3px 9px;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 700;
+  }
   table { width: 100%; border-collapse: collapse; }
   th { background: #fbfcfd; text-align: left; padding: 10px 12px; font-size: 0.84rem; color: var(--muted); }
   td { padding: 10px 12px; border-top: 1px solid #eef2f7; font-size: 0.92rem; vertical-align: top; }
@@ -153,6 +166,7 @@
   .time-badge { background: #e8f7ef; color: #166534; padding: 2px 8px; border-radius: 8px; font-weight: 700; }
   .transfer-badge { background: var(--warm); color: #9a3412; padding: 2px 8px; border-radius: 8px; font-weight: 700; }
   .route { color: var(--muted); font-size: 0.84rem; word-break: break-word; }
+  .target-popup strong { color: var(--brand); }
   @media (max-width: 720px) {
     .results-shell { grid-template-columns: 1fr; }
     .map-panel { position: static; }
@@ -199,124 +213,63 @@
           <option value="all">通常（新幹線除外）</option>
           <option value="all_shinkansen">すべて（新幹線含む）</option>
           <option value="local">普通のみ</option>
-          <option value="express">優等のみ（急行・快速・特急など）</option>
+          <option value="rapid">快速のみ</option>
+          <option value="express_only">急行のみ</option>
+          <option value="limited">特急系のみ</option>
+          <option value="express">優等まとめ</option>
         </select>
       </div>
       <button onclick="doSearch()">検索</button>
     </div>
     <p class="meta-note" style="margin-top: 12px;">
-      `通常` は新幹線を除いた検索です。`優等のみ` は `急行 / 快速 / 特急 / 快特 / 通勤急行` をまとめて検索します。
-      その路線に優等データが未登録なら結果には出ません。
+      通常は新幹線を除いた検索です。優等まとめは急行・快速・特急・快特・通勤急行を対象にします。
+      種別精度は順次見直し中なので、違和感がある結果はそのまま調整対象として拾っていきます。
     </p>
   </div>
-  <div id="results"><p class="info">終着駅と条件を入れて検索してください</p></div>
+  <div id="results"><p class="info">終着駅を入力して検索してください</p></div>
 </div>
+
 <script>
 let mapInstance = null;
 let markerLayer = null;
 
 const stations = {{ stations | tojson }};
-const input = document.getElementById('target');
-const sugBox = document.getElementById('suggestions');
+const input = document.getElementById("target");
+const sugBox = document.getElementById("suggestions");
 
-input.addEventListener('input', () => {
+const serviceLabels = {
+  all: "通常（新幹線除外）",
+  all_shinkansen: "すべて（新幹線含む）",
+  local: "普通のみ",
+  rapid: "快速のみ",
+  express_only: "急行のみ",
+  limited: "特急系のみ",
+  express: "優等まとめ",
+};
+
+input.addEventListener("input", () => {
   const value = input.value.trim();
-  sugBox.innerHTML = '';
+  sugBox.innerHTML = "";
   if (!value) return;
   const hits = stations.filter(name => name.includes(value)).slice(0, 15);
   hits.forEach(name => {
-    const item = document.createElement('div');
+    const item = document.createElement("div");
     item.textContent = name;
     item.onclick = () => {
       input.value = name;
-      sugBox.innerHTML = '';
+      sugBox.innerHTML = "";
     };
     sugBox.appendChild(item);
   });
 });
 
-document.addEventListener('click', event => {
-  if (!event.target.closest('.input-wrap')) sugBox.innerHTML = '';
+document.addEventListener("click", event => {
+  if (!event.target.closest(".input-wrap")) sugBox.innerHTML = "";
 });
 
-input.addEventListener('keydown', event => {
-  if (event.key === 'Enter') doSearch();
+input.addEventListener("keydown", event => {
+  if (event.key === "Enter") doSearch();
 });
-
-async function doSearch() {
-  const target = document.getElementById('target').value.trim();
-  const time = document.getElementById('time').value;
-  const transfers = document.getElementById('transfers').value;
-  const service = document.getElementById('service').value;
-  if (!target) return;
-
-  const resultArea = document.getElementById('results');
-  resultArea.innerHTML = '<p class="loading">検索中...</p>';
-
-  const params = new URLSearchParams({ target, time });
-  if (transfers !== '') params.set('transfers', transfers);
-  if (service !== 'all') params.set('service', service);
-
-  const response = await fetch('/search?' + params.toString());
-  const data = await response.json();
-
-  if (data.error) {
-    resultArea.innerHTML = '<p class="error">' + data.error + '</p>';
-    return;
-  }
-
-  const transferLabel = transfers === '' ? '制限なし' : (transfers + '回まで');
-  const serviceLabel =
-    service === 'all' ? '通常（新幹線除外）'
-    : service === 'all_shinkansen' ? 'すべて（新幹線含む）'
-    : service === 'local' ? '普通のみ'
-    : '優等のみ（急行・快速・特急など）';
-  let html = '<div class="result-card"><div class="result-header">' +
-    '<h2>' + data.target + ' へ ' + time + '分以内</h2>' +
-    '<span class="count">' + data.count + '駅</span></div>' +
-    '<p class="meta-note">種別: ' + serviceLabel + ' / 乗換: ' + transferLabel + '</p>' +
-    '<div class="results-shell"><div class="result-main">';
-
-  if (data.count === 0) {
-    html += '<p class="info">条件に合う駅はありませんでした</p></div>' +
-      '<div class="map-panel"><h3>マップ</h3><div id="map"></div>' +
-      '<div class="map-legend">' +
-      '<span class="legend-item"><span class="legend-dot" style="background:#16a34a"></span>10分以内</span>' +
-      '<span class="legend-item"><span class="legend-dot" style="background:#2563eb"></span>20分以内</span>' +
-      '<span class="legend-item"><span class="legend-dot" style="background:#f59e0b"></span>30分以内</span>' +
-      '<span class="legend-item"><span class="legend-dot" style="background:#ef4444"></span>30分超</span>' +
-      '</div><p class="map-note">座標付きの駅があるとここに表示されます。描画対象: ' + ((data.results || []).filter(item => item.lat != null && item.lng != null).length) + '駅</p></div></div></div>';
-    resultArea.innerHTML = html;
-    renderMap(data);
-    return;
-  }
-
-  data.groups.forEach(group => {
-    html += '<div class="group-card">';
-    html += '<div class="group-head"><div class="group-title"><span>' + group.line +
-      '</span><span class="service-badge">' + group.service + '</span></div>' +
-      '<span class="count">' + group.count + '駅</span></div>';
-    html += '<table><thead><tr><th>駅名</th><th>時間</th><th>乗換</th><th>経路</th></tr></thead><tbody>';
-    group.results.forEach(item => {
-      html += '<tr><td><strong>' + item.station + '</strong></td>' +
-        '<td><span class="time-badge">' + item.time + '分</span></td>' +
-        '<td><span class="transfer-badge">' + item.transfers + '回</span></td>' +
-        '<td class="route">' + item.route + '</td></tr>';
-    });
-    html += '</tbody></table></div>';
-  });
-
-  html += '</div><div class="map-panel"><h3>到達駅マップ</h3><div id="map"></div>' +
-    '<div class="map-legend">' +
-    '<span class="legend-item"><span class="legend-dot" style="background:#16a34a"></span>10分以内</span>' +
-    '<span class="legend-item"><span class="legend-dot" style="background:#2563eb"></span>20分以内</span>' +
-    '<span class="legend-item"><span class="legend-dot" style="background:#f59e0b"></span>30分以内</span>' +
-    '<span class="legend-item"><span class="legend-dot" style="background:#ef4444"></span>30分超</span>' +
-    '</div>' +
-    '<p class="map-note">終着駅を強調表示し、到達駅を所要時間ごとに色分けします。描画対象: ' + ((data.results || []).filter(item => item.lat != null && item.lng != null).length) + '駅</p></div></div></div>';
-  resultArea.innerHTML = html;
-  renderMap(data);
-}
 
 function markerColor(minutes) {
   if (minutes <= 10) return "#16a34a";
@@ -327,9 +280,108 @@ function markerColor(minutes) {
 
 function popupHtml(item) {
   return "<strong>" + item.station + "</strong><br>" +
-    (item.time || 0) + "? / " + (item.transfers || 0) + "?<br>" +
+    item.time + " min / " + item.transfers + " transfers<br>" +
     item.base_line + " [" + item.service + "]<br>" +
     item.route;
+}
+
+function targetPopupHtml(data) {
+  return "<div class=\"target-popup\"><strong>" + data.target + "</strong><br>終着駅</div>";
+}
+
+function buildMapPanel(results, targetCoords, targetName) {
+  const drawableCount = results.filter(item => item.lat != null && item.lng != null).length;
+  return "" +
+    "<div class=\"map-panel\">" +
+      "<h3>到達駅マップ</h3>" +
+      "<div id=\"map\"></div>" +
+      "<div class=\"map-legend\">" +
+        "<span class=\"legend-item\"><span class=\"legend-dot\" style=\"background:#16a34a\"></span>10分以内</span>" +
+        "<span class=\"legend-item\"><span class=\"legend-dot\" style=\"background:#2563eb\"></span>20分以内</span>" +
+        "<span class=\"legend-item\"><span class=\"legend-dot\" style=\"background:#f59e0b\"></span>30分以内</span>" +
+        "<span class=\"legend-item\"><span class=\"legend-dot\" style=\"background:#ef4444\"></span>30分超</span>" +
+      "</div>" +
+      "<p class=\"map-note\">終着駅を強調表示し、到達駅を所要時間ごとに色分けします。描画対象: " + drawableCount + "駅</p>" +
+    "</div>";
+}
+
+async function doSearch() {
+  const target = document.getElementById("target").value.trim();
+  const time = document.getElementById("time").value;
+  const transfers = document.getElementById("transfers").value;
+  const service = document.getElementById("service").value;
+  if (!target) return;
+
+  const resultArea = document.getElementById("results");
+  resultArea.innerHTML = "<p class=\"loading\">検索中...</p>";
+
+  const params = new URLSearchParams({ target, time });
+  if (transfers !== "") params.set("transfers", transfers);
+  if (service !== "all") params.set("service", service);
+
+  const response = await fetch("/search?" + params.toString());
+  const data = await response.json();
+
+  if (data.error) {
+    resultArea.innerHTML = "<p class=\"error\">" + data.error + "</p>";
+    return;
+  }
+
+  const transferLabel = transfers === "" ? "制限なし" : (transfers + "回まで");
+  const serviceLabel = serviceLabels[service] || service;
+
+  let html = "" +
+    "<div class=\"result-card\">" +
+      "<div class=\"result-header\">" +
+        "<h2>" + data.target + " へ " + time + "分以内</h2>" +
+        "<span class=\"count\">" + data.count + "駅</span>" +
+      "</div>" +
+      "<p class=\"meta-note\">種別: " + serviceLabel + " / 乗換: " + transferLabel + "</p>" +
+      "<div class=\"results-shell\">" +
+        "<div class=\"result-main\">";
+
+  if (data.count === 0) {
+    html += "<p class=\"info\">条件に合う駅はありませんでした</p></div>";
+    html += buildMapPanel(data.results || [], data.target_coords, data.target);
+    html += "</div></div>";
+    resultArea.innerHTML = html;
+    renderMap(data);
+    return;
+  }
+
+  data.groups.forEach(group => {
+    html += "" +
+      "<div class=\"group-card\">" +
+        "<div class=\"group-head\">" +
+          "<div class=\"group-title\">" +
+            "<span>" + group.line + "</span>" +
+            "<span class=\"service-badge\">" + group.service + "</span>" +
+          "</div>" +
+          "<span class=\"count\">" + group.count + "駅</span>" +
+        "</div>" +
+        "<table>" +
+          "<thead><tr><th>駅名</th><th>時間</th><th>乗換</th><th>経路</th></tr></thead>" +
+          "<tbody>";
+
+    group.results.forEach(item => {
+      html += "" +
+        "<tr>" +
+          "<td><strong>" + item.station + "</strong></td>" +
+          "<td><span class=\"time-badge\">" + item.time + "分</span></td>" +
+          "<td><span class=\"transfer-badge\">" + item.transfers + "回</span></td>" +
+          "<td class=\"route\">" + item.route + "</td>" +
+        "</tr>";
+    });
+
+    html += "</tbody></table></div>";
+  });
+
+  html += "</div>";
+  html += buildMapPanel(data.results || [], data.target_coords, data.target);
+  html += "</div></div>";
+
+  resultArea.innerHTML = html;
+  renderMap(data);
 }
 
 function renderMap(data) {
@@ -358,20 +410,11 @@ function renderMap(data) {
   }
 
   const features = [];
-
   if (target && target.lat != null && target.lng != null) {
     features.push({
       type: "Feature",
       geometry: { type: "Point", coordinates: [target.lng, target.lat] },
-      properties: {
-        station: data.target,
-        time: 0,
-        transfers: 0,
-        base_line: "Target",
-        service: "Target",
-        route: "Target",
-        isTarget: true
-      }
+      properties: { isTarget: true, station: data.target }
     });
   }
 
@@ -403,7 +446,8 @@ function renderMap(data) {
       });
     },
     onEachFeature: (feature, layer) => {
-      layer.bindPopup(popupHtml(feature.properties || {}));
+      const props = feature.properties || {};
+      layer.bindPopup(props.isTarget ? targetPopupHtml(data) : popupHtml(props));
     }
   }).addTo(mapInstance);
 
@@ -411,25 +455,26 @@ function renderMap(data) {
     mapInstance.invalidateSize();
     const note = mapEl.parentElement ? mapEl.parentElement.querySelector(".map-note") : null;
     if (note) {
-      const layerCount = markerLayer && markerLayer.getLayers ? markerLayer.getLayers().length : -1;
-      const first = data.results && data.results.length ? data.results[0] : null;
-      const targetDebug = data.target_coords ? ("target=(" + data.target_coords.lat + "," + data.target_coords.lng + ")") : "target=null";
-      const firstDebug = first ? ("first=" + first.station + " lat=" + first.lat + " lng=" + first.lng) : "first=null";
-      note.textContent = "debug coords=" + points.length + " features=" + features.length + " layers=" + layerCount + " " + targetDebug + " " + firstDebug;
+      const layerCount = markerLayer && markerLayer.getLayers ? markerLayer.getLayers().length : 0;
+      note.textContent = "終着駅を強調表示し、到達駅を所要時間ごとに色分けします。描画対象: " + layerCount + "駅";
     }
+
     if (features.length === 0) {
       mapInstance.setView([35.681236, 139.767125], 11);
       return;
     }
+
     const bounds = markerLayer.getBounds();
     if (!bounds.isValid()) {
       mapInstance.setView([35.681236, 139.767125], 11);
       return;
     }
+
     if (features.length === 1) {
       mapInstance.setView(bounds.getCenter(), 14);
       return;
     }
+
     mapInstance.fitBounds(bounds, { padding: [24, 24], maxZoom: 15 });
   });
 }
