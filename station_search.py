@@ -1,4 +1,4 @@
-"""駅到達圏検索の探索ロジック。"""
+"""駅到達圏検索の検索ロジック。"""
 
 from __future__ import annotations
 
@@ -9,8 +9,32 @@ from pathlib import Path
 from typing import Any
 
 
-LOCAL_SERVICES = {"各駅停車", "各停", "普通"}
-EXPRESS_SERVICES = {"急行", "特急", "快速", "快特", "通勤急行"}
+SERVICE_CATEGORY_MAP = {
+    "各駅停車": "普通",
+    "各停": "普通",
+    "普通": "普通",
+    "快速": "快速",
+    "空港快速": "快速",
+    "通勤快速": "快速",
+    "準急": "急行",
+    "急行": "急行",
+    "通勤急行": "急行",
+    "快速急行": "急行",
+    "特急": "特急",
+    "快特": "特急",
+    "通勤特急": "特急",
+    "川越特急": "特急",
+    "ライナー": "特急",
+    "京王ライナー": "特急",
+    "S-TRAIN": "特急",
+}
+
+LOCAL_SERVICES = {"普通"}
+RAPID_SERVICES = {"快速"}
+EXPRESS_ONLY_SERVICES = {"急行"}
+LIMITED_SERVICES = {"特急"}
+# "優等のみ" は普通を含めず、快速・急行・特急系だけを対象にする。
+EXPRESS_SERVICES = RAPID_SERVICES | EXPRESS_ONLY_SERVICES | LIMITED_SERVICES
 SHINKANSEN_KEYWORD = "新幹線"
 
 
@@ -25,6 +49,12 @@ def canonicalize_station_name(name: str, aliases: dict[str, str] | None = None) 
     if not aliases:
         return name
     return aliases.get(name, name)
+
+
+def normalize_service_name(service: str | None) -> str:
+    if service is None:
+        return "普通"
+    return SERVICE_CATEGORY_MAP.get(str(service), str(service))
 
 
 def normalize_segment_time(value: Any) -> int:
@@ -80,10 +110,11 @@ def build_graph(network: dict) -> tuple[dict, dict, dict, dict]:
 
     for line in network["lines"]:
         line_name = line["name"]
+        service = normalize_service_name(line.get("service", "各駅停車"))
         line_catalog[line_name] = {
             "name": line_name,
             "base_name": line.get("base_name", line_name),
-            "service": line.get("service", "各駅停車"),
+            "service": service,
             "operator": line.get("operator"),
         }
         stations = line["stations"]
@@ -125,57 +156,70 @@ def search_reachable(
     filter_services = set((service_filter or {}).get("services", set()))
     exclude_shinkansen = bool((service_filter or {}).get("exclude_shinkansen"))
 
-    pq: list[tuple[int, int, str, str, bool, list[str]]] = []
-    best: dict[tuple[str, str, bool], tuple[int, int]] = {}
+    pq: list[tuple[int, int, str, str, bool, str | None, list[str]]] = []
+    best: dict[tuple[str, str, bool, str | None], tuple[int, int]] = {}
 
     for line in station_lines.get(target, set()):
         meta = line_catalog.get(line, {})
         if exclude_shinkansen and is_shinkansen_line(meta):
             continue
-        service = meta.get("service", "各駅停車")
+        service = normalize_service_name(meta.get("service", "各駅停車"))
         if filter_mode == "only" and service not in filter_services:
             continue
         used_match = service in filter_services if filter_mode == "contains" else True
-        heapq.heappush(pq, (0, 0, target, line, used_match, [f"{target}({line})"]))
+        matched_service = service if filter_mode == "contains" and service in filter_services else None
+        heapq.heappush(pq, (0, 0, target, line, used_match, matched_service, [f"{target}({line})"]))
 
     results = {}
 
     while pq:
-        time, transfers, station, current_line, used_match, path = heapq.heappop(pq)
+        time, transfers, station, current_line, used_match, matched_service, path = heapq.heappop(pq)
 
         if time > max_time:
             continue
         if max_transfers is not None and transfers > max_transfers:
             continue
 
-        state_key = (station, current_line, used_match)
+        state_key = (station, current_line, used_match, matched_service)
         if state_key in best:
             best_time, best_transfers = best[state_key]
             if time > best_time or (time == best_time and transfers >= best_transfers):
                 continue
         best[state_key] = (time, transfers)
 
-        if (filter_mode != "contains" or used_match) and (
-            station not in results or (time, transfers) < (results[station][0], results[station][1])
-        ):
+        if filter_mode == "contains":
             meta = line_catalog.get(current_line, {})
-            results[station] = (
+            final_service = normalize_service_name(meta.get("service", "各駅停車"))
+            result_service = matched_service or final_service
+            result_key = (station, result_service)
+        else:
+            meta = line_catalog.get(current_line, {})
+            final_service = normalize_service_name(meta.get("service", "各駅停車"))
+            result_service = final_service
+            result_key = station
+
+        if (filter_mode != "contains" or used_match) and (
+            result_key not in results or (time, transfers) < (results[result_key][0], results[result_key][1])
+        ):
+            results[result_key] = (
                 time,
                 transfers,
                 " -> ".join(path),
                 current_line,
                 meta.get("base_name", current_line),
-                meta.get("service", "各駅停車"),
+                result_service,
             )
 
         for neighbor, segment_time, line_name in graph.get(station, []):
             meta = line_catalog.get(line_name, {})
             if exclude_shinkansen and is_shinkansen_line(meta):
                 continue
-            service = meta.get("service", "各駅停車")
+            service = normalize_service_name(meta.get("service", "各駅停車"))
             if filter_mode == "only" and service not in filter_services:
                 continue
-            next_used_match = used_match or (service in filter_services if filter_mode == "contains" else False)
+            matched_here = service if filter_mode == "contains" and service in filter_services else None
+            next_used_match = used_match or (matched_here is not None)
+            next_matched_service = matched_service or matched_here
 
             new_time = time + int(segment_time)
             if new_time > max_time:
@@ -193,23 +237,26 @@ def search_reachable(
                     continue
                 new_path = path + [f"乗換@{station}", f"{neighbor}({line_name})"]
 
-            next_state = (neighbor, line_name, next_used_match)
+            next_state = (neighbor, line_name, next_used_match, next_matched_service)
             if next_state in best:
                 best_time, best_transfers = best[next_state]
                 if new_time > best_time or (new_time == best_time and new_transfers >= best_transfers):
                     continue
 
-            heapq.heappush(pq, (new_time, new_transfers, neighbor, line_name, next_used_match, new_path))
+            heapq.heappush(
+                pq,
+                (new_time, new_transfers, neighbor, line_name, next_used_match, next_matched_service, new_path),
+            )
 
     return results
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(description="駅到達圏検索")
     parser.add_argument("target", help="終着駅")
-    parser.add_argument("time", type=int, help="最大所要時間（分）")
+    parser.add_argument("time", type=int, help="最大時間（分）")
     parser.add_argument("-t", "--transfers", type=int, default=None, help="最大乗換回数")
-    parser.add_argument("-d", "--data", default=None, help="ネットワークデータ JSON パス")
+    parser.add_argument("-d", "--data", default=None, help="network.json のパス")
     parser.add_argument("--sort", choices=["time", "name", "transfers"], default="time", help="ソート順")
     args = parser.parse_args()
 
@@ -237,15 +284,14 @@ def main():
         transfer_context,
         None,
     )
-    results.pop(target, None)
-
     if not results:
-        print(f"{target} へ {args.time} 分以内に到達できる駅はありません。")
+        print(f"{target} へ {args.time}分以内に到達できる駅はありません。")
         return
 
     items = [
-        (station, time, transfers, route, base_name, service)
-        for station, (time, transfers, route, _line_name, base_name, service) in results.items()
+        ((result_key[0] if isinstance(result_key, tuple) else result_key), time, transfers, route, base_name, service)
+        for result_key, (time, transfers, route, _line_name, base_name, service) in results.items()
+        if (result_key[0] if isinstance(result_key, tuple) else result_key) != target
     ]
     if args.sort == "time":
         items.sort(key=lambda x: (x[1], x[2], x[0]))
@@ -255,15 +301,14 @@ def main():
         items.sort(key=lambda x: x[0])
 
     transfer_label = f"乗換{args.transfers}回まで" if args.transfers is not None else "乗換制限なし"
-    print(f"\n{'=' * 60}")
+    print("\n" + "=" * 60)
     print(f" {target} へ {args.time}分以内 ({transfer_label})")
     print(f" 到達駅数: {len(items)}駅")
-    print(f"{'=' * 60}")
-    print(f" {'駅名':<10} {'時間':>5} {'乗換':>4}  経路")
-    print(f"{'-' * 60}")
+    print("=" * 60)
+
     for station, time, transfers, route, base_name, service in items:
-        print(f" {station:<10} {time:>3}分 {transfers:>3}回 [{base_name}/{service}] {route}")
-    print(f"{'=' * 60}")
+        print(f"{station:12} {time:>3}分  乗換{transfers}回  [{base_name} / {service}]")
+        print(f"   {route}")
 
 
 if __name__ == "__main__":

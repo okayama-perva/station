@@ -7,6 +7,9 @@ from flask import Flask, jsonify, render_template, request
 from station_search import (
     EXPRESS_SERVICES,
     LOCAL_SERVICES,
+    RAPID_SERVICES,
+    EXPRESS_ONLY_SERVICES,
+    LIMITED_SERVICES,
     build_graph,
     canonicalize_station_name,
     load_network,
@@ -35,9 +38,6 @@ MANUAL_COORD_OVERRIDES = {
     "中川": {"lat": 35.563085, "lng": 139.56968},
     "大久保": {"lat": 35.700635, "lng": 139.697445},
 }
-RAPID_SERVICES = {"快速"}
-EXPRESS_ONLY_SERVICES = {"急行"}
-LIMITED_SERVICES = {"特急", "快特", "通勤急行"}
 network = load_network()
 station_aliases = network.get("station_aliases", {})
 station_coordinates = network.get("station_coordinates", {})
@@ -121,11 +121,9 @@ def search():
         transfer_context,
         parse_service_filter(service_filter),
     )
-    results.pop(target, None)
-
     items = [
         {
-            "station": station,
+            "station": (result_key[0] if isinstance(result_key, tuple) else result_key),
             "time": time,
             "transfers": transfers,
             "route": reverse_route(route),
@@ -133,10 +131,11 @@ def search():
             "base_line": base_name,
             "service": service,
             "group_key": f"{base_name} [{service}]",
-            "lat": (station_coord(station) or {}).get("lat"),
-            "lng": (station_coord(station) or {}).get("lng"),
+            "lat": (station_coord(result_key[0] if isinstance(result_key, tuple) else result_key) or {}).get("lat"),
+            "lng": (station_coord(result_key[0] if isinstance(result_key, tuple) else result_key) or {}).get("lng"),
         }
-        for station, (time, transfers, route, line_name, base_name, service) in results.items()
+        for result_key, (time, transfers, route, line_name, base_name, service) in results.items()
+        if (result_key[0] if isinstance(result_key, tuple) else result_key) != target
     ]
     if service_filter == "express":
         items = [item for item in items if item["service"] in EXPRESS_SERVICES]
